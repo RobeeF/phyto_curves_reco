@@ -8,7 +8,7 @@ Created on Tue Apr 14 17:11:29 2020
 import os
 import numpy as np
 import pandas as pd
-
+import fastparquet as fp
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
 
@@ -120,6 +120,10 @@ len(Counter(y_train.argmax(1)))
 len(Counter(y_valid.argmax(1)))
 len(Counter(y_test.argmax(1)))
 
+np.savez_compressed('SSLAMM_L3/train', X = X_train, y = y_train)
+np.savez_compressed('SSLAMM_L3/test', X = X_test, y = y_test)
+np.savez_compressed('SSLAMM_L3/valid', X =X_valid, y = y_valid)
+
 
 np.save('SSLAMM_L3/X_train', X_train)
 np.save('SSLAMM_L3/y_train', y_train)
@@ -216,21 +220,20 @@ X_micro_obs = np.concatenate([X_micro_obs, X_test_F[proc_micro_idx]], axis = 0)
 y_micro_obs = np.concatenate([y_micro_obs, y_test_F[proc_micro_idx]], axis = 0)
 
 # Nomenclature change, shift the microphyto column by one 
-y_micro_obs = np.insert(y_micro_obs, 2, values=0, axis=1)
+#y_micro_obs = np.insert(y_micro_obs, 2, values=0, axis=1)
 
 idx = list(range(len(y_micro_obs)))
 np.random.shuffle(idx)
 
-
 # Load training set from SSLAMM
-X_train_SS = np.load('SSLAMM_L3/X_train_umbal_SLAMM.npy')
-y_train_SS = np.load('SSLAMM_L3/y_train_umbal_SLAMM.npy')
+X_train_SS = np.load('SSLAMM_L3/X_train.npy')
+y_train_SS = np.load('SSLAMM_L3/y_train.npy')
 
-X_valid_SS = np.load('SSLAMM_L3/X_valid_umbal_SLAMM.npy')
-y_valid_SS = np.load('SSLAMM_L3/y_valid_umbal_SLAMM.npy')
+X_valid_SS = np.load('SSLAMM_L3/X_valid.npy')
+y_valid_SS = np.load('SSLAMM_L3/y_valid.npy')
 
-X_test_SS = np.load('SSLAMM_L3/X_test_umbal_SLAMM.npy')
-y_test_SS = np.load('SSLAMM_L3/y_test_umbal_SLAMM.npy')
+X_test_SS = np.load('SSLAMM_L3/X_test.npy')
+y_test_SS = np.load('SSLAMM_L3/y_test.npy')
 
 
 # Enrich training set of SSLAMM with the FUMSECK data
@@ -244,6 +247,10 @@ X_hybrid_test = np.concatenate([X_test_SS, X_micro_obs[idx[3010: ]]], axis = 0)
 y_hybrid_test = np.concatenate([y_test_SS, y_micro_obs[idx[3010: ]]], axis = 0)
 
 
+from collections import Counter
+Counter(y_hybrid_test.argmax(1))
+len(X_hybrid_valid)
+
 # Save the hybrid dataset 
 np.save('hybrid_L3/X_train', X_hybrid_train)
 np.save('hybrid_L3/y_train', y_hybrid_train)
@@ -253,6 +260,11 @@ np.save('hybrid_L3/y_valid', y_hybrid_valid)
 
 np.save('hybrid_L3/X_test', X_hybrid_test)
 np.save('hybrid_L3/y_test', y_hybrid_test)
+
+
+np.savez_compressed('hybrid_L3/train', X = X_hybrid_train, y = y_hybrid_train)
+np.savez_compressed('hybrid_L3/test', X = X_hybrid_test, y = y_hybrid_test)
+np.savez_compressed('hybrid_L3/valid', X =X_hybrid_valid, y = y_hybrid_valid)
 
 
 #########################################################################################

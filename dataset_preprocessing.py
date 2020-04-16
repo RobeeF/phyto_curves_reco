@@ -285,6 +285,8 @@ def homogeneous_cluster_names(array):
         array['cluster'] = array.cluster.str.replace('picohighFLR','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('PicoHIGHFLR','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('unassigned_particle','noise')
+        array['cluster'] = array.cluster.str.replace('unassigned particles','noise')
+        array['cluster'] = array.cluster.str.replace('unassigned particle','noise')
 
         array['cluster'] = array.cluster.str.replace('es$','e') # Put in the names in singular form
         array['cluster'] = array.cluster.str.lower()

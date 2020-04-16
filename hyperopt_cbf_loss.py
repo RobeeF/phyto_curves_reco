@@ -22,10 +22,11 @@ from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
 from keras.models import Model
 from keras import metrics
 
+from keras import optimizers
+
+from losses import categorical_focal_loss
 from sklearn.metrics import confusion_matrix, precision_score
 
-
-from keras import optimizers
 
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
@@ -54,7 +55,7 @@ def data():
     y_test = test['y']
     
     tn = pd.read_csv('train_test_nomenclature.csv')
-    tn.columns = ['Particle_class', 'label']
+    tn.columns = ['Particle_class', 'label']  
             
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
@@ -105,8 +106,8 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
     balancing_dict = Counter(np.argmax(y_train,axis = 1))
     for class_, obs_nb in balancing_dict.items():
-        if obs_nb > 200:
-            balancing_dict[class_] = 200
+        if obs_nb > 300:
+            balancing_dict[class_] = 300
     
     
     rus = RandomUnderSampler(sampling_strategy = balancing_dict)
@@ -120,43 +121,27 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     #==================================================
   
     adam = optimizers.Adam(lr={{choice([10**-3, 10**-2, 10**-1])}})
-    ada = optimizers.Adadelta(lr={{choice([10**-3, 10**-2, 10**-1])}})
-    sgd = optimizers.SGD(lr={{choice([10**-3, 10**-2, 10**-1])}})
-    
-    choiceval = {{choice(['adam', 'sgd', 'ada'])}}
-    if choiceval == 'adam':
-        optim = adam
-    elif choiceval == 'ada':
-        optim = ada
-    else:
-        optim = sgd
         
-    # Defining the weights: Take the average over SSLAMM data
-    weights = {{choice(['regular', 'sqrt'])}}
     
-    if weights == 'regular':
-        w = 1 / np.sum(y_valid, axis = 0)
-        w = w / w.sum()
-        
-    else:
-        w = 1 / np.sqrt(np.sum(y_valid, axis = 0))
-        w = w / w.sum() 
 
     batch_size = {{choice([64, 128])}}
     STEP_SIZE_TRAIN = (len(X_rs) // batch_size) + 1 
     STEP_SIZE_VALID = (len(X_valid) // batch_size) + 1 
 
+    alpha = {{choice([0.1, 0.25, 0.5, 0.8, 0.9])}}
+    gamma = {{choice([0.5, 1, 1.5, 2, 2.5])}}
 
-    model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=optim)
+    model.compile(loss=[categorical_focal_loss(alpha= alpha, gamma = gamma)], metrics=['accuracy'], optimizer = adam)
     
     result = model.fit(X_rs, y_rs, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = 10, class_weight = w, shuffle=True, verbose=2)
+                    epochs = 1, shuffle=True, verbose=2)
 
     #Get the highest validation accuracy of the training epochs
     validation_acc = np.amax(result.history['val_loss']) 
     print('Best validation acc of epoch:', validation_acc)
     return {'loss': -validation_acc, 'status': STATUS_OK, 'model': model}
+
 
 
 
@@ -166,7 +151,7 @@ if __name__ == '__main__':
     best_run, best_model = optim.minimize(model=create_model,
                                           data=data,
                                           algo=tpe.suggest,
-                                          max_evals=5,
+                                          max_evals=7,
                                           trials=Trials())
     
     X_train, y_train, X_valid, y_valid, X_test, y_test = data()
@@ -177,4 +162,4 @@ if __name__ == '__main__':
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_categ')
+    best_model.save('hyperopt_model_cbf')
