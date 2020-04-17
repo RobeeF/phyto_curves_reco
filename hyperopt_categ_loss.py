@@ -12,7 +12,7 @@ import numpy as np
 from hyperopt import Trials, STATUS_OK, tpe
 
 from hyperas import optim
-from hyperas.distributions import choice, uniform
+from hyperas.distributions import choice, uniform, normal
 
 import os
 from collections import Counter
@@ -20,12 +20,15 @@ import pandas as pd
 from imblearn.under_sampling import RandomUnderSampler
 from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
 from keras.models import Model
-from keras import metrics
 
 from sklearn.metrics import confusion_matrix, precision_score
 
+from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
 
 from keras import optimizers
+import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
 
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
@@ -43,7 +46,7 @@ def data():
 
     train = np.load('train.npz')
     valid = np.load('valid.npz')
-    test = np.load('valid.npz')
+    test = np.load('test.npz')
     
     X_train = train['X']
     X_valid = valid['X']
@@ -78,103 +81,95 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     max_len = X_train.shape[1]
     nb_curves = X_train.shape[2]
     
-    sequence_input = Input(shape=(max_len, nb_curves), dtype='float32')
+    sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
     
     # A 1D convolution with 128 output channels: Extract features from the curves
-    x = Conv1D(64, 5, activation='relu')(sequence_input)
-    x = Conv1D(32, 5, activation='relu')(x)
-    x = Conv1D(16, 5, activation='relu')(x)
+    x = tf.keras.layers.Conv1D(64, 5, activation='relu')(sequence_input)
+    x = tf.keras.layers.Conv1D(32, 5, activation='relu')(x)
+    x = tf.keras.layers.Conv1D(16, 5, activation='relu')(x)
 
     # Average those features
-    average = GlobalAveragePooling1D()(x)
-    dense2 = Dense(32, activation='relu')(average) # Does using 2*32 layers make sense ?
-    drop2 = Dropout(dp)(dense2)
-    dense3 = Dense(32, activation='relu')(drop2)
-    drop3 = Dropout(dp)(dense3)
-    dense4 = Dense(16, activation='relu')(drop3)
-    drop4 = Dropout(dp)(dense4)
+    average = tf.keras.layers.GlobalAveragePooling1D()(x)
+    dense2 = tf.keras.layers.Dense(32, activation='relu')(average) # Does using 2*32 layers make sense ?
+    drop2 = tf.keras.layers.Dropout(dp)(dense2)
+    dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
+    drop3 = tf.keras.layers.Dropout(dp)(dense3)
+    dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
+    drop4 = tf.keras.layers.Dropout(dp)(dense4)
 
-    predictions = Dense(N_CLASSES, activation='softmax')(drop4)
+    predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
     
-    
-    model = Model(sequence_input, predictions)
-    
-    #==================================================
-    # Data random sampling
-    #==================================================
-
-    balancing_dict = Counter(np.argmax(y_train,axis = 1))
-    for class_, obs_nb in balancing_dict.items():
-        if obs_nb > 200:
-            balancing_dict[class_] = 200
-    
-    
-    rus = RandomUnderSampler(sampling_strategy = balancing_dict)
-    ids = np.arange(len(X_train)).reshape((-1, 1))
-    ids_rs, y_rs = rus.fit_sample(ids, y_train)
-    X_rs = X_train[ids_rs.flatten()] 
+    model = tf.keras.Model(sequence_input, predictions)     
     
     
     #==================================================
     # Specifying the optimizer
     #==================================================
   
-    adam = optimizers.Adam(lr={{choice([10**-3, 10**-2, 10**-1])}})
-    ada = optimizers.Adadelta(lr={{choice([10**-3, 10**-2, 10**-1])}})
-    sgd = optimizers.SGD(lr={{choice([10**-3, 10**-2, 10**-1])}})
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
+    check = ModelCheckpoint(filepath='w_categ_hyperopt.hdf5',\
+                            verbose = 1, save_best_only=True)
+  
     
-    choiceval = {{choice(['adam', 'sgd', 'ada'])}}
-    if choiceval == 'adam':
-        optim = adam
-    elif choiceval == 'ada':
-        optim = ada
+    optim_ch = {{choice(['adam', 'ranger'])}}
+    lr = {{uniform(1e-3, 1e-2)}}
+    
+    if optim_ch == 'adam':
+        optim = tf.keras.optimizers.Adam(lr = lr)
     else:
-        optim = sgd
-        
+        sync_period = {{choice([2, 6, 10])}}
+        slow_step_size = {{normal(0.5, 0.2)}}   
+        rad = RectifiedAdam(lr = lr)
+        optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
+    
+    
     # Defining the weights: Take the average over SSLAMM data
     weights = {{choice(['regular', 'sqrt'])}}
     
     if weights == 'regular':
-        w = 1 / np.sum(y_valid, axis = 0)
-        w = w / w.sum()
+        w = 1 / np.sum(y_train, axis = 0)
+        w = w / w.sum()            
         
     else:
-        w = 1 / np.sqrt(np.sum(y_valid, axis = 0))
+        w = 1 / np.sqrt(np.sum(y_train, axis = 0))
         w = w / w.sum() 
 
-    batch_size = {{choice([64, 128])}}
-    STEP_SIZE_TRAIN = (len(X_rs) // batch_size) + 1 
-    STEP_SIZE_VALID = (len(X_valid) // batch_size) + 1 
+    w = dict(zip(range(8),w))
+
+    batch_size = {{choice([64 * 8, 128 * 8])}}
+    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
+    STEP_SIZE_VALID = 1 
 
 
     model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=optim)
     
-    result = model.fit(X_rs, y_rs, validation_data=(X_valid, y_valid), \
+    result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = 10, class_weight = w, shuffle=True, verbose=2)
+                    epochs = 60, class_weight = w, shuffle=True, verbose=2, callbacks = [check, es])
+
 
     #Get the highest validation accuracy of the training epochs
-    validation_acc = np.amax(result.history['val_loss']) 
-    print('Best validation acc of epoch:', validation_acc)
-    return {'loss': -validation_acc, 'status': STATUS_OK, 'model': model}
+    loss_acc = np.amin(result.history['val_loss']) 
+    print('Min loss of epoch:', loss_acc)
+    return {'loss': loss_acc, 'status': STATUS_OK, 'model': model}
 
 
 
 if __name__ == '__main__':
-    os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
     best_run, best_model = optim.minimize(model=create_model,
                                           data=data,
                                           algo=tpe.suggest,
-                                          max_evals=5,
+                                          max_evals=30,
                                           trials=Trials())
     
     X_train, y_train, X_valid, y_valid, X_test, y_test = data()
     print("Evalutation of best performing model:")
     preds = best_model.predict(X_test)
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))  
     print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))  
     print(confusion_matrix(y_test.argmax(1), preds.argmax(1), labels = list(range(y_test.shape[1]))))
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_categ')
+    best_model.save('hyperopt_model_categ', save_format = 'h5')

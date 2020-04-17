@@ -102,7 +102,7 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1], trai
     
 
 def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extract_per_group = 100, \
-                       to_balance = True, to_undersample = False, seed = None):
+                       to_balance = True, to_undersample = False, scale = False, seed = None):
     ''' Generate a balanced dataset from the cleaned Pulse files 
     source (str): The location of extracted (and formatted) Pulse files on disk
     cluster_classes (list of str): The classes used in the prediction task
@@ -160,6 +160,10 @@ def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extrac
 
     # Give the final form to the dataset   
     X = np.vstack(X)
+    
+    if scale: 
+       X = scaler(X) 
+        
     y = np.concatenate(y)
     
     # Encode y and taking care of missing classes

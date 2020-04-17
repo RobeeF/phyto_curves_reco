@@ -12,20 +12,24 @@ import numpy as np
 from hyperopt import Trials, STATUS_OK, tpe
 
 from hyperas import optim
-from hyperas.distributions import choice, uniform
+from hyperas.distributions import choice, uniform, normal
 
-import os
 from collections import Counter
 import pandas as pd
 from imblearn.under_sampling import RandomUnderSampler
-from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
-from keras.models import Model
+#from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
+#from keras.models import Model
 from keras import metrics
+import tensorflow as tf
 
-from keras import optimizers
+#from keras import optimizers
 
 from sklearn.metrics import confusion_matrix, precision_score
 from losses import categorical_focal_loss
+
+from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
 
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
@@ -43,7 +47,7 @@ def data():
 
     train = np.load('train.npz')
     valid = np.load('valid.npz')
-    test = np.load('valid.npz')
+    test = np.load('test.npz')
     
     X_train = train['X']
     X_valid = valid['X']
@@ -96,65 +100,64 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
     predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
     
-    model = tf.keras.Model(sequence_input, predictions)    
-    
-
-    #==================================================
-    # Data random sampling
-    #==================================================
-
-    balancing_dict = Counter(np.argmax(y_train,axis = 1))
-    for class_, obs_nb in balancing_dict.items():
-        if obs_nb > 100:
-            balancing_dict[class_] = 100
-    
-    
-    rus = RandomUnderSampler(sampling_strategy = balancing_dict)
-    ids = np.arange(len(X_train)).reshape((-1, 1))
-    ids_rs, y_rs = rus.fit_sample(ids, y_train)
-    X_rs = X_train[ids_rs.flatten()] 
-    
+    model = tf.keras.Model(sequence_input, predictions)     
     
     #==================================================
     # Specifying the optimizer
     #==================================================
-  
-    adam = tf.keras.optimizers.Adam(lr=1e-3)
-        
-    batch_size = {{choice([64, 128])}}
-    STEP_SIZE_TRAIN = (len(X_rs) // batch_size) + 1 
-    STEP_SIZE_VALID = (len(X_valid) // batch_size) + 1 
-
-    alpha = {{choice([0.1, 0.25, 0.5, 0.8, 0.9])}}
-    gamma = {{choice([0.5, 1, 1.5, 2, 2.5])}}
-
-    model.compile(loss=[categorical_focal_loss(alpha= alpha, gamma = gamma)], metrics=['accuracy'], optimizer = adam)
+       
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
+    check = ModelCheckpoint(filepath='w_focal_hyperopt.hdf5',\
+                            verbose = 1, save_best_only=True)
     
-    result = model.fit(X_rs, y_rs, validation_data=(X_valid, y_valid), \
+    optim_ch = {{choice(['adam', 'ranger'])}}
+    lr = {{uniform(1e-3, 1e-2)}}
+    
+    if optim_ch == 'adam':
+        optim = tf.keras.optimizers.Adam(lr = lr)
+    else:
+        sync_period = {{choice([2, 6, 10])}}
+        slow_step_size = {{normal(0.5, 0.2)}}   
+        rad = RectifiedAdam(lr = lr)
+        optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
+    
+    batch_size = {{choice([64 * 8, 128 * 8])}}
+    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
+    STEP_SIZE_VALID = 1
+
+
+    alpha = {{uniform(0, 1)}}
+    gamma = {{normal(2, 1)}}
+
+    model.compile(loss=[categorical_focal_loss(alpha= alpha, gamma = gamma)], 
+                  metrics=['accuracy'], optimizer = optim)
+    
+    result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = 1, shuffle=True, verbose=2)
+                    epochs = 60, shuffle=True, verbose=2, callbacks = [check, es])
 
     #Get the highest validation accuracy of the training epochs
-    validation_acc = np.amax(result.history['val_loss']) 
-    print('Best validation acc of epoch:', validation_acc)
-    return {'loss': -validation_acc, 'status': STATUS_OK, 'model': model}
+    loss_acc = np.amin(result.history['val_loss']) 
+    print('Min loss of epoch:', loss_acc)
+    return {'loss': loss_acc, 'status': STATUS_OK, 'model': model}
 
 
 if __name__ == '__main__':
-    os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+    #os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
     best_run, best_model = optim.minimize(model=create_model,
                                           data=data,
                                           algo=tpe.suggest,
-                                          max_evals=7,
+                                          max_evals=30,
                                           trials=Trials())
     
     X_train, y_train, X_valid, y_valid, X_test, y_test = data()
     print("Evalutation of best performing model:")
     preds = best_model.predict(X_test)
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))  
     print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))  
     print(confusion_matrix(y_test.argmax(1), preds.argmax(1), labels = list(range(y_test.shape[1]))))
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_focal')
+    best_model.save('hyperopt_model_focal', save_format = 'h5')

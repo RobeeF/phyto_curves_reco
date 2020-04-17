@@ -19,12 +19,10 @@ from keras.callbacks import EarlyStopping
 from sklearn.metrics import confusion_matrix, precision_score
 
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline')
-cluster_classes = pd.read_csv('nomenclature.csv')['Nomenclature'].tolist()
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+cluster_classes = pd.read_csv('train_test_nomenclature.csv')['cluster'].tolist()
 
 from models import model13
-
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
 
 from pred_functions import predict
 from losses import categorical_focal_loss, CB_loss
@@ -593,3 +591,17 @@ sslamm_clf.save('LottyNet_SSLAMM_baloss_enriched')
 
 Counter(y_train.argmax(1))
 Counter(preds)
+
+
+#### Load model test
+import tensorflow as tf
+
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco/trained_models')
+model = tf.keras.models.load_model('LottyNet_SSLAMM_categ')
+pred_proba = model.predict(X_test)
+(pred_proba.argmax(1) == y_test.argmax(1)).mean()
+
+preds = np.argmax(model.predict(X_test), axis = 1)
+true = np.argmax(y_test, axis = 1)
+
+acc = np.mean(preds == true)
