@@ -12,6 +12,7 @@ import scipy.integrate as it
 from dataset_preprocessing import scaler
 import fastparquet as fp
 import re
+from collections import Counter
 
 def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth = True):
     ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
@@ -111,3 +112,106 @@ def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth 
         print('File was empty.')
 
 
+def pred_n_count(source_path, model, tn, exp_count = False):
+    ''' Pred and count on the fly '''
+    max_len = 120 # The standard length to which is sequence will be broadcasted
+    
+    #================================================
+    # Import and format data
+    #================================================
+    
+    pfile = fp.ParquetFile(source_path)
+    df = pfile.to_pandas()
+    df = df.set_index('Particle ID')
+               
+    grouped_df = df[['SWS','FWS', 'FL Orange', 'FL Red', 'Curvature']].groupby('Particle ID')
+
+    obs_list = [obs.values.T for pid, obs in grouped_df]        
+    obs_list = interp_sequences(obs_list, max_len)
+
+    X = np.transpose(obs_list, (0, 2, 1))
+    
+    #================================================
+    # Predict and format predictions
+    #================================================
+    preds_oh = model.predict(X)
+    
+    preds_proba = preds_oh.sum(0).round().astype(int)
+    keys = range(len(tn))
+    count_proba = {key: preds_proba[key] for key in keys}
+    
+    preds = preds_oh.argmax(axis = 1)
+    count = dict(Counter(preds))
+
+    lab_count = {}
+    lab_count_proba = {}
+    
+    for i in range(len(tn)):
+        try:
+            lab_count[list(tn[tn['label'] == i]['Particle_class'])[0]] = count[i]
+            lab_count_proba[list(tn[tn['label'] == i]['Particle_class'])[0]] = count_proba[i]
+        except KeyError:
+            print('key number ', i, 'was not found')
+   
+    cl_count = pd.DataFrame(pd.Series(lab_count)).T
+    cl_count_proba = pd.DataFrame(pd.Series(lab_count_proba)).T
+    
+    #================================================
+    # Keep only interesting particles
+    #================================================
+    flr_regex = 'Pulse([0-9]{1,2})'
+
+    flr_num = int(re.search(flr_regex, source_path).group(1))
+    
+    # Keep only "big" phytoplancton from FLR25 and "small" one from FLR6 
+    if flr_num == 25:
+        for clus_name in ['picoeucaryote', 'synechococcus', 'prochlorococcus']:
+            if clus_name in cl_count.columns:
+                cl_count[clus_name] = 0
+                cl_count_proba[clus_name] = 0
+
+        
+    elif flr_num == 6:
+        for clus_name in ['cryptophyte', 'nanoeucaryote', 'microphytoplancton']:
+            if clus_name in cl_count.columns:
+                cl_count[clus_name] = 0
+                cl_count_proba[clus_name] = 0
+
+    else:
+        raise RuntimeError('Unkonwn flr number', flr_num)
+    
+    
+    #======================================================
+    # Format the date
+    #======================================================
+    
+    # The timestamp is rounded to the closest 20 minutes 
+    date_regex = "Pulse[0-9]{1,2}_(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:u|h)[0-9]{2})"
+
+    date = re.search(date_regex, source_path).group(1)
+    date = pd.to_datetime(date, format='%Y-%m-%d %Hh%M', errors='ignore')
+    mins = date.minute
+                
+    if (mins >= 00) & (mins < 15): 
+        date = date.replace(minute=00)
+
+    elif (mins >= 15) & (mins <= 35): 
+        date = date.replace(minute=20)
+    
+    elif (mins > 35) & (mins < 57):
+        date = date.replace(minute=40)
+        
+    elif mins >= 57:
+        if date.hour != 23:
+            date = date.replace(hour= date.hour + 1, minute=00)
+        else:
+            try:
+                date = date.replace(day = date.day + 1, hour = 00, minute=00)
+            except:
+                date = date.replace(month = date.month + 1, day = 1, hour = 00, minute=00)
+                
+    cl_count['date'] = date 
+    cl_count_proba['date'] = date 
+
+
+    return cl_count, cl_count_proba

@@ -190,13 +190,12 @@ def interp_sequences(sequences, max_len):
         returns (ndarray): The interpolated sequences
     '''
 
-    interp_obs = []
-    # Looping is dirty... But the sequences have different lengths...
+    interp_obs = np.zeros((len(sequences), 5, 120))
     for idx, s in enumerate(sequences): 
         original_len = s.shape[1]
         f = interp1d(np.arange(original_len), s, 'quadratic', axis = 1)
-        interp_seq = np.apply_along_axis(f, 0, np.linspace(0, original_len -1, num = max_len))
-        interp_obs.append(interp_seq)
+        interp_seq = f(np.linspace(0, original_len -1, num = max_len))
+        interp_obs[idx] = interp_seq
     
     return np.stack(interp_obs) 
 

@@ -70,10 +70,83 @@ for file in files:
     phyto_ts = phyto_ts.append(cl_count)
 
 
+
+##########################################################################
+# On the fly prediction
+##########################################################################
+
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+
+from pred_functions import pred_n_count
+import tensorflow as tf
+from tensorflow_addons.optimizers import Lookahead, RectifiedAdam
+from time import time
+from copy import deepcopy
+from losses import categorical_focal_loss
+
+# Model and nomenclature 
+model = tf.keras.models.load_model('trained_models/hyperopt_model_focal2', compile = False)
+model.compile(optimizer=Lookahead(RectifiedAdam(lr = 0.003589101299926042), 
+                                  sync_period = 10, slow_step_size = 0.20736365316666247),
+              loss = categorical_focal_loss(gamma = 2.199584705628343, alpha = 0.25))
+
+
+tn = pd.read_csv('train_test_nomenclature.csv')
+tn.columns = ['Particle_class', 'label']
+
+phyto_ts = pd.DataFrame(columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte', \
+       'unassigned particle', 'airbubble', 'microphytoplancton', 'prochlorococcus', 'date'])
+
+phyto_ts_proba = deepcopy(phyto_ts)
+  
+
+os.chdir('C:/Users/rfuchs/Documents/SSLAMM_P2')
+
+  
+# Define where to look the data at and where to store preds
+'''
+export_folder = "C:/Users/rfuchs/Documents/SSLAMM_P1/SSLAMM_unlab_compiled_L1"
+files = os.listdir(export_folder)
+
+pulse_regex = "_Pulse" 
+files = [file for file in files if re.search(pulse_regex, file)] # The files containing the data to predict
+'''
+
+export_folder = "C:/Users/rfuchs/Documents/SSLAMM_P2"
+files = os.listdir(export_folder)
+
+pulse_regex = "_Pulse" 
+files = [file for file in files if re.search(pulse_regex, file)] # The files containing the data to predict
+
+count = 0
+start = time()
+for idx, file in enumerate(files):
+
+    source_path = export_folder + '/' + file
+
+    cl_count, cl_count_proba = pred_n_count(source_path, model, tn, exp_count = False)
+    phyto_ts = phyto_ts.append(cl_count)
+    phyto_ts_proba = phyto_ts_proba.append(cl_count_proba)
+
+    count += 1
+    
+    if count % 10 == 0:
+        print('Dumping file:', idx ,file)
+        phyto_ts.to_csv('SSLAMM_count_17042020.csv')
+        phyto_ts_proba.to_csv('SSLAMM_count_proba_17042020.csv', index = False)
+    
+        end = time() 
+        print((end - start) / 60, 'hours ')
+
+
 ##########################################################################    
 # Final serie with representative count for the first part of the serie
 ##########################################################################
-idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size())
+os.chdir('C:/Users/rfuchs/Documents/preds/pred2/P1')
+phyto_ts = pd.read_csv('SSLAMM_count_17042020.csv')
+phyto_ts = phyto_ts.iloc[:,1:]
+
+idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size()) # Make the same thing for phyto_ts_proba 
 idx_pbs = idx_pbs[idx_pbs[0] == 1].index
 
 # Few date reformating
@@ -90,13 +163,13 @@ phyto_rpz_ts = phyto_rpz_ts.reset_index()
 for idx in idx_pbs:
     phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
 
-phyto_rpz_ts.to_csv('C:/Users/rfuchs/Documents/09_to_12_2019.csv', index = False)
+phyto_rpz_ts.to_csv('09_to_12_2019_proba.csv', index = False)
 
 ##########################################################################    
 # Final serie with representative count for the second part of the serie
 ##########################################################################
-    
-idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size())
+   
+idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size()) # Make the same thing for phyto_ts_proba 
 idx_pbs = idx_pbs[idx_pbs[0] == 1].index
 
 # Few date reformating
@@ -112,6 +185,3 @@ for idx in idx_pbs:
     phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
 
 phyto_rpz_ts.to_csv('C:/Users/rfuchs/Documents/02_to_03_2020.csv', index = False)
-
-
-    

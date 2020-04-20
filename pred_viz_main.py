@@ -11,7 +11,7 @@ import numpy as np
 import os 
 from sklearn.metrics import confusion_matrix, precision_score
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
 
 
@@ -307,11 +307,12 @@ set(a.index) - set(true.index)
 set(true.index) - set(a.index)
 
 #############################################################################################
-# Plot predicted time series 
+# Plot predicted time series : 1st pred
 #############################################################################################
-from dataset_prepocessing import homogeneous_cluster_names
+from dataset_preprocessing import homogeneous_cluster_names
+os.chdir('C:/Users/rfuchs/Documents/preds')
 
-ts = pd.read_csv('C:/Users/rfuchs/Documents/09_to_12_2019.csv')
+ts = pd.read_csv('pred2/P1/09_to_12_2019.csv')
 ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
 ts = ts.set_index('date')
 
@@ -352,6 +353,113 @@ for cluster_name in ts.columns:
 
 ts['microphytoplancton'].plot()
 
+
+#############################################################################################
+# Plot predicted time series : 2nd pred
+#############################################################################################
+from dataset_preprocessing import homogeneous_cluster_names
+os.chdir('C:/Users/rfuchs/Documents/preds')
+
+
+#==================================================================
+# Old prediction import
+#==================================================================
+old_ts = pd.read_csv('pred1/P1/09_to_12_2019.csv')
+old_ts['date'] =  pd.to_datetime(old_ts['date'], format='%Y-%m-%d %H:%M:%S')
+old_ts = old_ts.set_index('date')
+
+cols_plot = old_ts.columns
+axes = old_ts[cols_plot].plot(alpha=0.5, linestyle='-', figsize=(11, 9), subplots=True)
+for ax in axes:
+    ax.set_ylabel('Count')
+
+#==================================================================
+# New prediction import
+#==================================================================
+
+ts = pd.read_csv('pred2/P1/09_to_12_2019.csv')
+ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
+ts = ts.set_index('date')
+ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
+       'noise', 'airbubble', 'microphytoplancton',
+       'prochlorococcus']
+
+cols_plot = ts.columns
+axes = ts[cols_plot].plot(alpha=0.5, linestyle='-', figsize=(11, 9), subplots=True)
+for ax in axes:
+    ax.set_ylabel('Count')
+
+#==================================================================
+# New prediction import with proba
+#==================================================================
+
+ts_proba = pd.read_csv('pred2/P1/09_to_12_2019_proba.csv')
+ts_proba['date'] =  pd.to_datetime(ts_proba['date'], format='%Y-%m-%d %H:%M:%S')
+ts_proba = ts_proba.set_index('date')
+ts_proba.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
+       'noise', 'airbubble', 'microphytoplancton',
+       'prochlorococcus']
+
+cols_plot = ts_proba.columns
+axes = ts_proba[cols_plot].plot(alpha=0.5, linestyle='-', figsize=(11, 9), subplots=True)
+for ax in axes:
+    ax.set_ylabel('Count')    
+
+ts_proba['microphytoplancton']
+ts['microphytoplancton']
+
+#==================================================================
+# True series import
+#==================================================================
+
+true_ts = pd.read_csv('pred2/P1/09_to_12_2019_true.csv', sep = ';', engine = 'python')
+true_ts = true_ts[['Date','count', 'set']]
+true_ts['Date'] =  pd.to_datetime(true_ts['Date'], format='%d/%m/%Y %H:%M:%S')
+true_ts.columns = ['Date','count', 'cluster']
+true_ts = homogeneous_cluster_names(true_ts)
+true_ts['cluster'] = true_ts['cluster'].replace('default (all)', 'noise')
+
+true_ts = true_ts.set_index('Date')
+
+true_ts['nanoeucaryote']
+true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == 'nanoeucaryote']['count'])
+true_ts_clus.mean()
+
+for cluster_name in ts.columns: 
+    pred_ts_clus = pd.DataFrame(ts[cluster_name])
+    pred_ts_clus.columns = ['pred_count']
+    pred_ts_clus.index = pred_ts_clus.index.floor('H')
+
+    
+    old_pred_ts_clus = pd.DataFrame(old_ts[cluster_name])
+    old_pred_ts_clus.columns = ['old_pred_count']
+    old_pred_ts_clus.index = old_pred_ts_clus.index.floor('H')
+    
+    pred_ts_proba_clus = pd.DataFrame(ts_proba[cluster_name])
+    pred_ts_proba_clus.columns = ['pred_count_proba']
+    pred_ts_proba_clus.index = pred_ts_proba_clus.index.floor('H')
+
+    
+    if cluster_name in set(true_ts['cluster']):
+        # Picoeuk comparison: (HighFLR are neglected)
+        true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name]['count'])
+        true_ts_clus.columns = ['true_count']
+           
+        true_ts_clus.index = true_ts_clus.index.floor('H')
+            
+        all_clus = true_ts_clus.join(pred_ts_clus)
+        all_clus = all_clus.join(old_pred_ts_clus)
+        all_clus = all_clus.join(pred_ts_proba_clus)
+        
+        all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
+        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')
+    else:
+        all_clus = old_pred_ts_clus.join(pred_ts_clus)
+        all_clus = all_clus.join(pred_ts_proba_clus)
+        print(all_clus)
+        all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
+        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')        
+        print(cluster_name, 'is not in true_ts pred')
 
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)

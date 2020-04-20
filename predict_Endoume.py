@@ -7,7 +7,7 @@ Created on Fri Dec  6 13:17:25 2019
 
 import os
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
 
 import re
@@ -21,8 +21,8 @@ from keras.models import load_model
 # Model and nomenclature loading
 model = load_model('trained_models/LottyNet_FUMSECK')
 
-tn = pd.read_csv('train_nomenclature.csv')
-tn.columns = ['Label', 'id']
+tn = pd.read_csv('train_test_nomenclature.csv')
+tn.columns = ['Particle_class', 'label']
 
 # Define where to look the data at and where to store preds
 export_folder = "C:/Users/rfuchs/Documents/SSLAMM_P2/SSLAMM_L1"
@@ -58,3 +58,4 @@ for file in files_to_pred:
             
     else:
         print(file, 'already predicted')
+        
