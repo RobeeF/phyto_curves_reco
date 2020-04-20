@@ -13,6 +13,7 @@ from dataset_preprocessing import scaler
 import fastparquet as fp
 import re
 from collections import Counter
+from copy import deepcopy
 
 def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth = True):
     ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
@@ -112,7 +113,21 @@ def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth 
         print('File was empty.')
 
 
-def pred_n_count(source_path, model, tn, exp_count = False):
+def correc_pred_thr(tn, thrs, pred_proba):
+  preds = pred_proba.argmax(1)
+  very_confident_pred = deepcopy(preds)
+
+  max_pred_proba = pred_proba.max(1)
+
+  for cl in range(len(tn)):
+    preds_cl_mask = (preds == cl)
+    not_sure_mask = max_pred_proba < thrs[cl]
+    very_confident_pred[not_sure_mask & preds_cl_mask] = 7
+  
+    return very_confident_pred
+
+
+def pred_n_count(source_path, model, tn, thrs, exp_count = False):
     ''' Pred and count on the fly '''
     max_len = 120 # The standard length to which is sequence will be broadcasted
     
@@ -136,25 +151,25 @@ def pred_n_count(source_path, model, tn, exp_count = False):
     #================================================
     preds_oh = model.predict(X)
     
-    preds_proba = preds_oh.sum(0).round().astype(int)
-    keys = range(len(tn))
-    count_proba = {key: preds_proba[key] for key in keys}
+    #preds_proba = preds_oh.sum(0).round().astype(int)
+    #keys = range(len(tn))
+    #count_proba = {key: preds_proba[key] for key in keys}
     
-    preds = preds_oh.argmax(axis = 1)
+    preds = correc_pred_thr(tn, thrs, preds_oh)
     count = dict(Counter(preds))
 
     lab_count = {}
-    lab_count_proba = {}
+    #lab_count_proba = {}
     
     for i in range(len(tn)):
         try:
             lab_count[list(tn[tn['label'] == i]['Particle_class'])[0]] = count[i]
-            lab_count_proba[list(tn[tn['label'] == i]['Particle_class'])[0]] = count_proba[i]
+            #lab_count_proba[list(tn[tn['label'] == i]['Particle_class'])[0]] = count_proba[i]
         except KeyError:
             print('key number ', i, 'was not found')
    
     cl_count = pd.DataFrame(pd.Series(lab_count)).T
-    cl_count_proba = pd.DataFrame(pd.Series(lab_count_proba)).T
+    #cl_count_proba = pd.DataFrame(pd.Series(lab_count_proba)).T
     
     #================================================
     # Keep only interesting particles
@@ -168,14 +183,14 @@ def pred_n_count(source_path, model, tn, exp_count = False):
         for clus_name in ['picoeucaryote', 'synechococcus', 'prochlorococcus']:
             if clus_name in cl_count.columns:
                 cl_count[clus_name] = 0
-                cl_count_proba[clus_name] = 0
+                #cl_count_proba[clus_name] = 0
 
         
     elif flr_num == 6:
         for clus_name in ['cryptophyte', 'nanoeucaryote', 'microphytoplancton']:
             if clus_name in cl_count.columns:
                 cl_count[clus_name] = 0
-                cl_count_proba[clus_name] = 0
+                #cl_count_proba[clus_name] = 0
 
     else:
         raise RuntimeError('Unkonwn flr number', flr_num)
@@ -211,7 +226,7 @@ def pred_n_count(source_path, model, tn, exp_count = False):
                 date = date.replace(month = date.month + 1, day = 1, hour = 00, minute=00)
                 
     cl_count['date'] = date 
-    cl_count_proba['date'] = date 
+    #cl_count_proba['date'] = date 
 
 
-    return cl_count, cl_count_proba
+    return cl_count#, cl_count_proba

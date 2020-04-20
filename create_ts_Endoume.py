@@ -94,29 +94,36 @@ model.compile(optimizer=Lookahead(RectifiedAdam(lr = 0.003589101299926042),
 tn = pd.read_csv('train_test_nomenclature.csv')
 tn.columns = ['Particle_class', 'label']
 
+
 phyto_ts = pd.DataFrame(columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte', \
        'unassigned particle', 'airbubble', 'microphytoplancton', 'prochlorococcus', 'date'])
 
 phyto_ts_proba = deepcopy(phyto_ts)
   
 
-os.chdir('C:/Users/rfuchs/Documents/SSLAMM_P2')
+# Extracted from X_test
+thrs = [0.8158158158158159, 0.7297297297297297, 0.5085085085085085, 0.3963963963963964, 0.8378378378378378, \
+        0.7417417417417418, 0.42542542542542544]
 
   
 # Define where to look the data at and where to store preds
-'''
+os.chdir('C:/Users/rfuchs/Documents/SSLAMM_P1')
+
 export_folder = "C:/Users/rfuchs/Documents/SSLAMM_P1/SSLAMM_unlab_compiled_L1"
 files = os.listdir(export_folder)
 
 pulse_regex = "_Pulse" 
 files = [file for file in files if re.search(pulse_regex, file)] # The files containing the data to predict
+
 '''
+os.chdir('C:/Users/rfuchs/Documents/SSLAMM_P2')
 
 export_folder = "C:/Users/rfuchs/Documents/SSLAMM_P2"
 files = os.listdir(export_folder)
 
 pulse_regex = "_Pulse" 
 files = [file for file in files if re.search(pulse_regex, file)] # The files containing the data to predict
+'''
 
 count = 0
 start = time()
@@ -124,19 +131,19 @@ for idx, file in enumerate(files):
 
     source_path = export_folder + '/' + file
 
-    cl_count, cl_count_proba = pred_n_count(source_path, model, tn, exp_count = False)
+    cl_count = pred_n_count(source_path, model, tn, thrs, exp_count = False)
     phyto_ts = phyto_ts.append(cl_count)
-    phyto_ts_proba = phyto_ts_proba.append(cl_count_proba)
+    #phyto_ts_proba = phyto_ts_proba.append(cl_count_proba)
 
     count += 1
     
     if count % 10 == 0:
         print('Dumping file:', idx ,file)
         phyto_ts.to_csv('SSLAMM_count_17042020.csv')
-        phyto_ts_proba.to_csv('SSLAMM_count_proba_17042020.csv', index = False)
+        #phyto_ts_proba.to_csv('SSLAMM_count_proba_17042020.csv', index = False)
     
         end = time() 
-        print((end - start) / 60, 'hours ')
+        print((end - start) / 60, 'minutes')
 
 
 ##########################################################################    
