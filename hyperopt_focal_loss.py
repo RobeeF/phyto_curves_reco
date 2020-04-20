@@ -117,17 +117,17 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         optim = tf.keras.optimizers.Adam(lr = lr)
     else:
         sync_period = {{choice([2, 6, 10])}}
-        slow_step_size = {{normal(0.5, 0.2)}}   
+        slow_step_size = {{normal(0.5, 0.1)}}   
         rad = RectifiedAdam(lr = lr)
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
     
-    batch_size = {{choice([64 * 8, 128 * 8])}}
+    batch_size = {{choice([64 * 4, 64 * 8])}}
     STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
     STEP_SIZE_VALID = 1
 
 
     alpha = {{uniform(0, 1)}}
-    gamma = {{normal(2, 1)}}
+    gamma = {{uniform(1, 2.5)}}
 
     model.compile(loss=[categorical_focal_loss(alpha= alpha, gamma = gamma)], 
                   metrics=['accuracy'], optimizer = optim)
@@ -143,7 +143,6 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
 
 if __name__ == '__main__':
-    #os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
     best_run, best_model = optim.minimize(model=create_model,
                                           data=data,
@@ -155,9 +154,11 @@ if __name__ == '__main__':
     print("Evalutation of best performing model:")
     preds = best_model.predict(X_test)
     print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))  
-    print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))  
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))  
+
     print(confusion_matrix(y_test.argmax(1), preds.argmax(1), labels = list(range(y_test.shape[1]))))
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_focal', save_format = 'h5')
+    best_model.save('hyperopt_model_focal2', save_format = 'h5')

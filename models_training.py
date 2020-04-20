@@ -32,6 +32,9 @@ from viz_functions import plot_2D, plot_2Dcyto
 raw_data_source = 'L1_FUMSECK'
 cleaned_data_source = 'L2_FUMSECK'
 
+tn = pd.read_csv('train_test_nomenclature.csv')
+tn.columns = ['Particle_class', 'label']
+
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 
 ##############################################################################################
@@ -605,3 +608,4 @@ preds = np.argmax(model.predict(X_test), axis = 1)
 true = np.argmax(y_test, axis = 1)
 
 acc = np.mean(preds == true)
+len(y_test)
