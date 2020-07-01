@@ -149,7 +149,7 @@ for idx, file in enumerate(files):
 ##########################################################################    
 # Final serie with representative count for the first part of the serie
 ##########################################################################
-os.chdir('C:/Users/rfuchs/Documents/preds/pred2/P1')
+os.chdir('C:/Users/rfuchs/Documents/preds/pred3/P1')
 phyto_ts = pd.read_csv('SSLAMM_count_17042020.csv')
 phyto_ts = phyto_ts.iloc[:,1:]
 
@@ -170,7 +170,7 @@ phyto_rpz_ts = phyto_rpz_ts.reset_index()
 for idx in idx_pbs:
     phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
 
-phyto_rpz_ts.to_csv('09_to_12_2019_proba.csv', index = False)
+phyto_rpz_ts.to_csv('09_to_12_2019.csv', index = False)
 
 ##########################################################################    
 # Final serie with representative count for the second part of the serie

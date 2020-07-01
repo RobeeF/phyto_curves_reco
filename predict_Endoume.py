@@ -17,7 +17,6 @@ from pred_functions import predict
 from keras.models import load_model
 
 
-
 # Model and nomenclature loading
 model = load_model('trained_models/LottyNet_FUMSECK')
 

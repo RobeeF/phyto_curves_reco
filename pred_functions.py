@@ -75,7 +75,11 @@ def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth 
         
         if scale:
             X = scaler(X)
-            
+        
+        
+        #preds_oh = model.predict(X)
+        #preds = correc_pred_thr(tn, thrs, preds_oh)
+
         preds = np.argmax(model.predict(X), axis = 1)
         
         

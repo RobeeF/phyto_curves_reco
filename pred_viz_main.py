@@ -12,6 +12,7 @@ import os
 from sklearn.metrics import confusion_matrix, precision_score
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+from losses import CB_loss
 
 
 
@@ -244,9 +245,10 @@ q2 = 'FL Red'
 
 plot_2Dcyto(X_trapz, y_label, tn, q1, q2)
 
-###################################################################################################################
-# Randomly pick some Endoume predictions and plot true vs pred 
-###################################################################################################################
+###############################################################################
+# Pick some Endoume predictions and plot true vs pred 
+###############################################################################
+
 import re
 import fastparquet as fp
 from dataset_prepocessing import homogeneous_cluster_names
@@ -461,9 +463,102 @@ for cluster_name in ts.columns:
         plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')        
         print(cluster_name, 'is not in true_ts pred')
 
+
+#############################################################################################
+# Plot predicted time series : 3rd pred
+#############################################################################################
+
+from dataset_preprocessing import homogeneous_cluster_names
+os.chdir('C:/Users/rfuchs/Documents/preds')
+
+
+#==================================================================
+# Old prediction import
+#==================================================================
+old_ts = pd.read_csv('pred2/P1/09_to_12_2019.csv')
+old_ts['date'] =  pd.to_datetime(old_ts['date'], format='%Y-%m-%d %H:%M:%S')
+old_ts = old_ts.set_index('date')
+old_ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
+       'noise', 'airbubble', 'microphytoplancton',
+       'prochlorococcus']
+
+cols_plot = old_ts.columns
+axes = old_ts[cols_plot].plot(alpha=0.5, linestyle='-', figsize=(11, 9), subplots=True)
+for ax in axes:
+    ax.set_ylabel('Count')
+
+#==================================================================
+# New prediction import
+#==================================================================
+
+ts = pd.read_csv('pred3/P1/09_to_12_2019.csv')
+ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
+ts = ts.set_index('date')
+ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
+       'noise', 'airbubble', 'microphytoplancton',
+       'prochlorococcus']
+
+cols_plot = ts.columns
+axes = ts[cols_plot].plot(alpha=0.5, linestyle='-', figsize=(11, 9), subplots=True)
+for ax in axes:
+    ax.set_ylabel('Count')
+
+
+#==================================================================
+# True series import
+#==================================================================
+
+true_ts = pd.read_csv('pred2/P1/09_to_12_2019_true.csv', sep = ';', engine = 'python')
+true_ts = true_ts[['Date','count', 'set']]
+true_ts['Date'] =  pd.to_datetime(true_ts['Date'], format='%d/%m/%Y %H:%M:%S')
+true_ts.columns = ['Date','count', 'cluster']
+true_ts = homogeneous_cluster_names(true_ts)
+true_ts['cluster'] = true_ts['cluster'].replace('default (all)', 'noise')
+
+true_ts = true_ts.set_index('Date')
+
+
+for cluster_name in ts.columns: 
+    pred_ts_clus = pd.DataFrame(ts[cluster_name])
+    pred_ts_clus.columns = ['pred_count']
+    pred_ts_clus.index = pred_ts_clus.index.floor('H')
+
+    
+    #old_pred_ts_clus = pd.DataFrame(old_ts[cluster_name])
+    #old_pred_ts_clus.columns = ['old_pred_count']
+    #old_pred_ts_clus.index = old_pred_ts_clus.index.floor('H')
+    
+    #pred_ts_proba_clus = pd.DataFrame(ts_proba[cluster_name])
+    #pred_ts_proba_clus.columns = ['pred_count_proba']
+    #pred_ts_proba_clus.index = pred_ts_proba_clus.index.floor('H')
+
+    
+    if cluster_name in set(true_ts['cluster']):
+        # Picoeuk comparison: (HighFLR are neglected)
+        true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name]['count'])
+        true_ts_clus.columns = ['true_count']
+           
+        true_ts_clus.index = true_ts_clus.index.floor('H')
+            
+        all_clus = true_ts_clus.join(pred_ts_clus)
+        #all_clus = all_clus.join(old_pred_ts_clus)
+        #all_clus = all_clus.join(pred_ts_proba_clus)
+        
+        all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
+        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')
+    else:
+        #all_clus = old_pred_ts_clus.join(pred_ts_clus)
+        all_clus = pred_ts_clus
+        #all_clus = all_clus.join(pred_ts_proba_clus)
+        all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
+        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')        
+        print(cluster_name, 'is not in true_ts pred')
+
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)
 ###################################################################################################################
+
+import fastparquet as fp
 from pred_functions import predict
 from viz_functions import plot_2D
 
@@ -483,7 +578,8 @@ tn = pd.read_csv('train_test_nomenclature_SSLAMM.csv')
 tn.columns = ['Particle_class', 'label']
 
 # Load pre-trained model
-LottyNet = load_model('C:/Users/rfuchs/Documents/cyto_classif/LottyNet_SSLAMM') 
+LottyNet = load_model('C:/Users/rfuchs/Documents/cyto_classif/LottyNet_SSLAMM_focal',\
+                      custom_objects={'categorical_focal_loss_fixed': CB_loss(sample_per_class)}) 
 
 # Making formated predictions 
 source_path = folder + '/' + file
@@ -499,6 +595,23 @@ print('Macro accuracy is', precision_score(preds['True FFT id'], preds['Pred FFT
 
 colors = ['#96ceb4', '#ffeead', '#ffcc5c', '#ff6f69', '#588c7e', '#f2e394', '#f2ae72', '#d96459']
 
+
+X = preds[['Total FLR', 'Total FLO']].values
+y = preds['Pred FFT Label'].values
+labels = preds['Pred FFT id'].values
+z = labels[..., np.newaxis]
+
+
+
+fig, ax = plt.subplots()
+CS = ax.contour(X, labels, Z)
+
+
+cmap = plt.get_cmap('Paired')
+fig, ax = plt.subplots()
+ax.contourf(X[:,0][..., np.newaxis], X[:,1][..., np.newaxis], z, cmap=cmap, alpha=0.5)
+
+
 #####################
 # 2D plots
 #####################
@@ -508,6 +621,10 @@ plot_2D(preds, tn, 'Total FWS', 'Total FLR', loc = 'upper left')
 plot_2D(preds, tn, 'Total SWS', 'Total FLR', loc = 'upper left')
 plot_2D(preds, tn, 'Total SWS', 'Total FWS', loc = 'upper left')
 
+
+# Decision boundaries plot
+plot_decision_boundaries2(preds, tn, 'Total FWS', 'Total FLR', \
+                          loc = 'upper left', title = None, colors = None)
 
 #===========================================
 # Viz one of the SSLAMM files
