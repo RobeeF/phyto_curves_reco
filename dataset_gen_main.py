@@ -10,15 +10,15 @@ import numpy as np
 import pandas as pd
 import fastparquet as fp
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco/')
 
 from time import time
 from collections import Counter
 from dataset_preprocessing import gen_dataset, gen_train_test_valid
 
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline')
-cluster_classes = pd.read_csv('nomenclature.csv')['Nomenclature'].tolist()
+#os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+#cluster_classes = pd.read_csv('nomenclature.csv')['Nomenclature'].tolist()
 
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 
@@ -142,12 +142,10 @@ np.save('SSLAMM_L3/y_test', y_test)
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 
 source = "SSLAMM_L2"
-source = "SSLAMM_L2"
-nb_train_files = 24
+nb_train_files = 44
 nb_valid_files = 4
 nb_test_files = 4
 
-nb_files_tvt = [nb_train_files, nb_valid_files, nb_test_files]
 
 files = os.listdir(source)
 
@@ -164,11 +162,11 @@ cluster_classes = ['airbubble', 'cryptophyte', 'hsnano', 'microphytoplancton',
        'synechococcus', 'unassigned particle']
 
 X_train, seq_len_list_train, y_train, pid_list_train, file_name_train, le_train = gen_dataset(source, \
-                            cluster_classes, train_files, None, nb_obs_to_extract_per_group = 600, default_sampling_nb = 70,\
+                            cluster_classes, train_files, None, nb_obs_to_extract_per_group = 600,\
                             to_balance = False, to_undersample = True, seed = None)
     
 X_valid, seq_len_list_valid, y_valid, pid_list_valid, file_name_valid, le_valid = gen_dataset(source, \
-                            cluster_classes, valid_files, None, nb_obs_to_extract_per_group = 600, default_sampling_nb = 70,\
+                            cluster_classes, valid_files, None, nb_obs_to_extract_per_group = 600,\
                             to_balance = False, to_undersample = True, seed = None)
 
 # Extract the test dataset from full files
@@ -190,7 +188,6 @@ np.save('SSLAMM_L3/y_test_umbal_SLAMM', y_test)
 ##############################################################################################
 ######### Enriched full data SSLAMM data with airbubbles and microphyto ##################
 ##############################################################################################
-
 
 # Import and keep Airbubbles and microphyto from FUMSECK
 ## Load data
@@ -265,6 +262,123 @@ np.save('hybrid_L3/y_test', y_hybrid_test)
 np.savez_compressed('hybrid_L3/train', X = X_hybrid_train, y = y_hybrid_train)
 np.savez_compressed('hybrid_L3/test', X = X_hybrid_test, y = y_hybrid_test)
 np.savez_compressed('hybrid_L3/valid', X =X_hybrid_valid, y = y_hybrid_valid)
+
+
+##############################################################################################
+##################### Small SSLAMM data with 9 sets #########################################
+##############################################################################################
+
+os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
+source = "training_9sets/SSLAMM/L2/all_lab"
+
+nb_train_files = 10
+nb_valid_files = 4
+nb_test_files = 4
+
+nb_files_tvt = [nb_train_files, nb_valid_files, nb_test_files]
+
+cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
+                   'inf1microm_unidentified_particle', 'microphytoplancton',\
+                'picoeucaryote', 'prochlorococcus', \
+                'sup1microm_unidentified_particle', 'synechococcus']
+    
+
+start = time()
+X_train, y_train, X_valid, y_valid, X_test, y_test = gen_train_test_valid(source, cluster_classes, nb_files_tvt, \
+                                                                          train_umbal_margin = 8000, seed = None)
+end = time()
+print(end - start) # About ... minutes
+
+    
+np.save('9sets_L3/X_train_9sets_small_SSLAMM', X_train)
+np.save('9sets_L3/y_train_9sets_small_SSLAMM', y_train)
+
+np.save('9sets_L3/X_valid_9sets_small_SSLAMM', X_valid)
+np.save('9sets_L3/y_valid_9sets_small_SSLAMM', y_valid)
+
+np.save('9sets_L3/X_test_9sets_small_SSLAMM', X_test)
+np.save('9sets_L3/y_test_9sets_small_SSLAMM', y_test)
+
+
+
+##############################################################################################
+######### Enriched Small 9 sets SSLAMM data with airbubbles and microphyto ##################
+##############################################################################################
+
+# Import and keep Airbubbles and microphyto from FUMSECK
+## Load data
+X_train_F = np.load('FUMSECK_L3/X_train610.npy')
+y_train_F = np.load('FUMSECK_L3/y_train610.npy')
+
+X_valid_F = np.load('FUMSECK_L3/X_valid610.npy')
+y_valid_F = np.load('FUMSECK_L3/y_valid610.npy')
+
+X_test_F = np.load('FUMSECK_L3/X_test610.npy')
+y_test_F = np.load('FUMSECK_L3/y_test610.npy')
+
+np.random.seed = 0
+
+## Select from the 3 sets 
+proc_micro_idx = np.logical_or((y_train_F.argmax(1) == 0), (y_train_F.argmax(1) == 2))
+X_micro_obs = X_train_F[proc_micro_idx]
+y_micro_obs = y_train_F[proc_micro_idx]
+
+proc_micro_idx = np.logical_or((y_valid_F.argmax(1) == 0), (y_valid_F.argmax(1) == 2))
+X_micro_obs = np.concatenate([X_micro_obs, X_valid_F[proc_micro_idx]], axis = 0)
+y_micro_obs = np.concatenate([y_micro_obs, y_valid_F[proc_micro_idx]], axis = 0)
+
+
+proc_micro_idx = np.logical_or((y_test_F.argmax(1) == 0), (y_test_F.argmax(1) == 2))
+X_micro_obs = np.concatenate([X_micro_obs, X_test_F[proc_micro_idx]], axis = 0)
+y_micro_obs = np.concatenate([y_micro_obs, y_test_F[proc_micro_idx]], axis = 0)
+
+# Nomenclature change, shift the microphyto column by one 
+y_micro_obs = np.insert(y_micro_obs, 2, values=0, axis=1)
+
+idx = list(range(len(y_micro_obs)))
+np.random.shuffle(idx)
+
+# Load training set from SSLAMM
+X_train_SS = np.load('9sets_L3/X_train_9sets_small_SSLAMM.npy')
+y_train_SS = np.load('9sets_L3/y_train_9sets_small_SSLAMM.npy')
+
+X_valid_SS = np.load('9sets_L3/X_valid_9sets_small_SSLAMM.npy')
+y_valid_SS = np.load('9sets_L3/y_valid_9sets_small_SSLAMM.npy')
+
+X_test_SS = np.load('9sets_L3/X_test_9sets_small_SSLAMM.npy')
+y_test_SS = np.load('9sets_L3/y_test_9sets_small_SSLAMM.npy')
+
+
+# Enrich training set of SSLAMM with the FUMSECK data
+X_hybrid_train = np.concatenate([X_train_SS, X_micro_obs[idx[ :2000]]], axis = 0)
+y_hybrid_train = np.concatenate([y_train_SS, y_micro_obs[idx[ :2000]]], axis = 0)
+
+X_hybrid_valid = np.concatenate([X_valid_SS, X_micro_obs[idx[2000: 3010]]], axis = 0)
+y_hybrid_valid = np.concatenate([y_valid_SS, y_micro_obs[idx[2000: 3010]]], axis = 0)
+
+X_hybrid_test = np.concatenate([X_test_SS, X_micro_obs[idx[3010: ]]], axis = 0)
+y_hybrid_test = np.concatenate([y_test_SS, y_micro_obs[idx[3010: ]]], axis = 0)
+
+
+from collections import Counter
+Counter(y_hybrid_test.argmax(1))
+Counter(y_test_SS.argmax(1))
+len(X_hybrid_valid)
+
+# Save the hybrid dataset 
+np.save('9sets_hybrid_L3/X_train', X_hybrid_train)
+np.save('9sets_hybrid_L3/y_train', y_hybrid_train)
+
+np.save('9sets_hybrid_L3/X_valid', X_hybrid_valid)
+np.save('9sets_hybrid_L3/y_valid', y_hybrid_valid)
+
+np.save('9sets_hybrid_L3/X_test', X_hybrid_test)
+np.save('9sets_hybrid_L3/y_test', y_hybrid_test)
+
+
+np.savez_compressed('9sets_hybrid_L3/train', X = X_hybrid_train, y = y_hybrid_train)
+np.savez_compressed('9sets_hybrid_L3/test', X = X_hybrid_test, y = y_hybrid_test)
+np.savez_compressed('9sets_hybrid_L3/valid', X =X_hybrid_valid, y = y_hybrid_valid)
 
 
 #########################################################################################

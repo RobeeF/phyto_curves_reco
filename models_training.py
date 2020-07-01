@@ -596,16 +596,75 @@ Counter(y_train.argmax(1))
 Counter(preds)
 
 
-#### Load model test
-import tensorflow as tf
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco/trained_models')
-model = tf.keras.models.load_model('LottyNet_SSLAMM_categ')
-pred_proba = model.predict(X_test)
-(pred_proba.argmax(1) == y_test.argmax(1)).mean()
+##############################################################################################
+######## Try bal_focal_loss on few 9sets SSLAMM (FUMSECK enriched) files #####################
+##############################################################################################
 
-preds = np.argmax(model.predict(X_test), axis = 1)
+os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
+
+    
+X_train = np.load('9sets_hybrid_L3/X_train.npy')
+y_train = np.load('9sets_hybrid_L3/y_train.npy')
+
+X_valid = np.load('9sets_hybrid_L3/X_valid.npy')
+y_valid = np.load('9sets_hybrid_L3/y_valid.npy')  
+
+X_test = np.load('9sets_hybrid_L3/X_test.npy')
+y_test = np.load('9sets_hybrid_L3/y_test.npy')  # Il y a un soucis il devrait y avoir 0 
+
+tn = pd.read_csv('train_test_nomenclature_9sets.csv')
+tn.columns = ['Particle_class', 'label']
+    
+batch_size = 256
+STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
+STEP_SIZE_VALID =  1 #(len(X_valid) // 128) + 1 
+
+sslamm_clf = model13(X_train, y_train, dp = 0.2)
+es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=4)
+ENN_check = ModelCheckpoint(filepath='tmp/weights_9s_sslamm_foloss_enriched.hdf5',\
+                            verbose = 1, save_best_only=True)
+
+sample_per_class = np.sum(y_train, axis = 0) # Weights computed on valid, risk of overfit ?
+sample_per_class = np.where(sample_per_class == 0, 1, sample_per_class)
+
+# Use ranger instead in the future
+ad = adam(lr=1e-2)
+sslamm_clf.compile(loss=[categorical_focal_loss(alpha=6.980E-4, gamma=2.046)], \
+                   metrics=["accuracy"], optimizer=ad)
+
+
+epoch_nb = 2
+
+history = sslamm_clf.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
+                    steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
+                    epochs = epoch_nb, callbacks = [ENN_check, es],
+                        shuffle=True)
+    
+sslamm_clf.load_weights('tmp/weights_9s_sslamm_foloss_enriched.hdf5')
+
+# Compute test accuracy
+preds = np.argmax(sslamm_clf.predict(X_test), axis = 1)
 true = np.argmax(y_test, axis = 1)
 
+
 acc = np.mean(preds == true)
-len(y_test)
+print('Accuracy on test data !', acc)
+print('Macro accuracy is', precision_score(true, preds, average='macro'))
+cm = confusion_matrix(true, preds, labels = range(len(tn)))
+cm_pd = pd.DataFrame(cm, index=tn['cluster'], columns=tn['cluster'])
+cm_pd.to_csv('cm_9sets.csv')
+
+print(precision_score(true, preds, average = None, labels = list(range(len(tn)))))   
+
+X = pd.DataFrame(trapz(X_test, axis = 1), \
+                         columns = ['SWS','Total FWS', 'FL Orange', 'Total FLR', 'Curvature'])
+y = y_test.argmax(1)
+
+
+len(y)
+plot_2Dcyto(X,  y, tn, 'Total FWS', 'Total FLR', colors = None)
+plot_2Dcyto(X,  true, tn, 'Total FWS', 'Total FLR', colors = None)
+
+
+sslamm_clf.save('LottyNet_9s_SSLAMM_foloss_enriched')

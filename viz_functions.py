@@ -21,7 +21,8 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None):
     fig, ax1 = plt.subplots(1,1, figsize=(12,6))
     for id_, label in enumerate(list(tn['label'])):
         obs = X[y == label]
-        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= label, s = 1)
+        clus_name = list(tn[tn['label'] == label]['Particle_class'])[0]
+        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= clus_name, s = 1)
         ax1.legend(loc= 'upper left', shadow=True, fancybox=True, prop={'size':8})
     
     ax1.set_title('True :' +  q1 + ' vs ' + q2)

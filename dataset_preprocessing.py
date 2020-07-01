@@ -143,7 +143,7 @@ def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extrac
             df = df.reset_index()
         
         X_file, seq_len_file, y_file, pid_list_file = data_preprocessing(df, balancing_dict, CURVES_DEFAULT_LEN,  \
-                                                                    to_balance = to_balance, to_undersample = to_undersample, seed = seed)
+            to_balance = to_balance, to_undersample = to_undersample, seed = seed)
 
         X.append(X_file)
         y.append(y_file)
@@ -221,7 +221,7 @@ def data_preprocessing(df, balancing_dict = None, max_len = None,  \
     df = homogeneous_cluster_names(df)
     pid_cluster = df[['Particle ID', 'cluster']].drop_duplicates()
     clus_value_count = pid_cluster.cluster.value_counts().to_dict()
-
+    
     if to_balance:
         # Deleting non existing keys and adapting to the data in place
         balancing_dict  = {k: min(balancing_dict[k], clus_value_count[k]) for k in clus_value_count.keys()}
@@ -235,7 +235,9 @@ def data_preprocessing(df, balancing_dict = None, max_len = None,  \
     else: # Keep the same distribution as in the original dataset
         if to_undersample: # Reduce the size of the dataset to speed things up
             pids = deepcopy(pid_cluster['Particle ID'].tolist())
-            pid_resampled = np.random.choice(pids, replace = False, size = DEFAULT_UDS_SIZE)
+            
+            uds_size = np.min([DEFAULT_UDS_SIZE, len(pids)])
+            pid_resampled = np.random.choice(pids, replace = False, size = uds_size)
             df_resampled = df.set_index('Particle ID').loc[pid_resampled.flatten()]
 
         else: 
@@ -278,31 +280,50 @@ def homogeneous_cluster_names(array):
     returns (array): The array with the name changed and the original shape  
     '''
     if type(array) == pd.core.frame.DataFrame:
+        array['cluster'] = array.cluster.str.replace('airbubbles','airbubble')
+        array['cluster'] = array.cluster.str.replace('cryptophytes','cryptophyte')
+
         array['cluster'] = array.cluster.str.replace('coccolithophorideae like','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('Nano1','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('Nano2','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('hsnano','nanoeucaryote')
+        array['cluster'] = array.cluster.str.replace('HSNano','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('HSnano','nanoeucaryote')
 
         array['cluster'] = array.cluster.str.replace('picohighflr','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('picohighFLR','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('PicoHIGHFLR','picoeucaryote')
+        
         array['cluster'] = array.cluster.str.replace('unassigned_particle','noise')
         array['cluster'] = array.cluster.str.replace('unassigned particles','noise')
         array['cluster'] = array.cluster.str.replace('unassigned particle','noise')
 
+        array['cluster'] = array.cluster.str.replace('µ','micro') # Put in the names in singular form
         array['cluster'] = array.cluster.str.replace('es$','e') # Put in the names in singular form
         array['cluster'] = array.cluster.str.lower()
 
         
     else:
+        
+        array = [re.sub('airbubbles','airbubble', string) for string in array]
+        array = [re.sub('cryptophytes','cryptophyte', string) for string in array]
+
         array = [re.sub('coccolithophorideae like','nanoeucaryote', string) for string in array]
         array = [re.sub('Nano1','nanoeucaryote', string) for string in array]
         array = [re.sub('Nano2','nanoeucaryote', string) for string in array]
-        array = [re.sub('hsnano','nanoeucaryote', string) for string in array]
+        array = [re.sub('hsnano','nanoeucaryote', string) for string in array]        
+        array = [re.sub('HSNano','nanoeucaryote', string) for string in array]
         array = [re.sub('HSnano','nanoeucaryote', string) for string in array]
-        array = [re.sub('PicoHIGHFLR','picoeucaryotes', string) for string in array]
+
         array = [re.sub('picohighflr','picoeucaryotes', string) for string in array]
+        array = [re.sub('picohighFLR','picoeucaryote', string) for string in array]
+        array = [re.sub('PicoHIGHFLR','picoeucaryotes', string) for string in array]
+        
+        array = [re.sub('unassigned_particle','noise', string) for string in array]
+        array = [re.sub('unassigned particles','noise', string) for string in array]
+        array = [re.sub('unassigned particle','noise', string) for string in array]
+
+        array = [re.sub('µ','micro', string) for string in array]        
         array = [re.sub('es$','e', string) for string in array]
         array = [string.lower() for string in array]
         array = list(array)

@@ -16,7 +16,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     ---------------------------------------------------------------------------------------------
     returns (None): Write the labelled Pulse shapes on hard disk
     '''
-    assert (flr_num == 6) or (flr_num == 25)
+    assert (flr_num == 6) or (flr_num == 25) or (flr_num == 7)
     
     nb_files_already_processed = 0
     log_file = data_destination + "/pred_logs.txt" # Register where write the already predicted files
@@ -36,10 +36,12 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
 
     # Defining the regex
     date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
-    pulse_regex = "_([a-zA-Z0-9 ()]+)_Pulses.csv"  
+    pulse_regex = "_([a-zA-Z0-9µ ()_]+)_Pulses.csv"  
 
     dates = set([re.search(date_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
+    
     cluster_classes = list(set([re.search(pulse_regex, cc).group(1) for cc in pulse_titles_clus]))
+
     
     if len(pulse_titles_default) != 0:
         cluster_classes += ['noise']
@@ -68,6 +70,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
         # For each file, i.e. for each functional group
         for title in date_datasets_titles:
             clus_name = re.search(pulse_regex, title).group(1) 
+            print(clus_name)
             
             try:
                 df = pd.read_csv(data_source + '/' + title, sep = ';', dtype = np.float64)
@@ -83,8 +86,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             # Add the date of the extraction
             df["date"] = date
             
-            # Get the name of the cluster from the file name
-            #clus_name = re.search(pulse_regex, title).group(1) 
+            # Add the cluster name 
             df["cluster"] = clus_name
             
             df.set_index("Particle ID", inplace = True)
