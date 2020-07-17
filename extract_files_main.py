@@ -54,12 +54,22 @@ extract_non_labeled_curves(data_source, data_destination, flr_num = flr_num)
 ##################################################################################################
 # ENDOUME Labelled
 ##################################################################################################
-
-#data_source = 'C:/Users/rfuchs/Documents/cyto_classif/training_11sets/SSLAMM/L1'
 data_source = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L1/P2'
 data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L2/P2_lab'
-flr_num = 7
+flr_num = 25
 extract_labeled_curves(data_source, data_destination, flr_num = flr_num, spe_extract_FLR = True)
+
+
+
+##################################################################################################
+# Piano Microphyto
+##################################################################################################
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/PIANO/L1'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/PIANO/L2'
+flr_num = 11
+extract_labeled_curves(data_source, data_destination, flr_num = flr_num, spe_extract_FLR = True)
+
+
 
 
 # Manque flr25 pour P1
@@ -67,7 +77,25 @@ extract_labeled_curves(data_source, data_destination, flr_num = flr_num, spe_ext
 # Labelled_Pulse6_2020-05-01 03h59: Que des airbubbles
 # Labelled_Pulse25_2019-11-18 02h07: Moins de 6000 particules
 import fastparquet as fp
-pfile = fp.ParquetFile(data_destination + '/' + 'Labelled_Pulse6_2019-09-20 07h59.parq')
+pfile = fp.ParquetFile(data_destination + '/' + 'Labelled_Pulse6_2020-02-19 05h59.parq')
 df = pfile.to_pandas()
 df.cluster.unique()
 len(df.index.unique())
+
+
+# Hack to remove:
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L1/P2'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L2/P2_lab'
+import fastparquet as fp
+pfile = fp.ParquetFile(data_destination + '/' + 'Labelled_Pulse25_2020-05-01 04h07.parq')
+df = pfile.to_pandas()
+
+
+list(df.loc[df.isna().any(1)]
+indices = list(np.where(df.isna()))
+np.where(np.asanyarray(np.isnan(df)))
+pd.isnull(df).any().nonzero()[0]
+(pd.isna(df.T) == True).any()
+idx = np.isnan(df.values).any(axis=(1,2))
+
+X_train = X_train[~idx]

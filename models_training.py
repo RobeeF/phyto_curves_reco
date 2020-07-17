@@ -634,7 +634,7 @@ sslamm_clf.compile(loss=[categorical_focal_loss(alpha=6.980E-4, gamma=2.046)], \
                    metrics=["accuracy"], optimizer=ad)
 
 
-epoch_nb = 2
+epoch_nb = 8
 
 history = sslamm_clf.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
@@ -661,9 +661,16 @@ X = pd.DataFrame(trapz(X_test, axis = 1), \
                          columns = ['SWS','Total FWS', 'FL Orange', 'Total FLR', 'Curvature'])
 y = y_test.argmax(1)
 
+from sklearn.preprocessing import MinMaxScaler
+from dataset_preprocessing import scaler
 
-len(y)
-plot_2Dcyto(X,  y, tn, 'Total FWS', 'Total FLR', colors = None)
+
+X_s = scaler(X_test)
+Xts = pd.DataFrame(trapz(X_s, axis = 1), \
+                         columns = ['SWS','Total FWS', 'FL Orange', 'Total FLR', 'Curvature'])
+    
+plot_2Dcyto(X, y, tn, 'Total FWS', 'Total FLR', colors = None)
+plot_2Dcyto(Xts,  y, tn, 'Total FWS', 'Total FLR', colors = None)
 plot_2Dcyto(X,  true, tn, 'Total FWS', 'Total FLR', colors = None)
 
 

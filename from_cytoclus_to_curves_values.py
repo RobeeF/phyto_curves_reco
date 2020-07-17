@@ -16,7 +16,8 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     ---------------------------------------------------------------------------------------------
     returns (None): Write the labelled Pulse shapes on hard disk
     '''
-    assert (flr_num == 6) or (flr_num == 25) or (flr_num == 7)
+    # Dirty assertion
+    assert (flr_num == 6) or (flr_num == 7) or (flr_num == 11) or (flr_num == 25) 
     
     nb_files_already_processed = 0
     log_file = data_destination + "/pred_logs.txt" # Register where write the already predicted files
@@ -29,13 +30,16 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     
     files_title = [f for f in os.listdir(data_source)]
     # Keep only the interesting csv files
-    flr_title = [f for f in files_title if re.search("FLR" + str(flr_num) + ' ',f) and re.search("csv",f) ]
+    #flr_title = [f for f in files_title if re.search("FLR" + str(flr_num) + ' ',f) and re.search("csv",f) ]
+    flr_title = [f for f in files_title if re.search("FLR" + str(flr_num),f) and re.search("csv",f) ]
 
     pulse_titles_clus = [f for f in flr_title if  re.search("Pulse",f) and not(re.search("Default",f))]
     pulse_titles_default = [f for f in flr_title if  re.search("Pulse",f) and re.search("Default",f)]
 
     # Defining the regex
-    date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
+    #date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
+
+    date_regex = "FLR" + str(flr_num) + "(?:IIF)+ (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_[A-Za-z ()]+"
     pulse_regex = "_([a-zA-Z0-9µ ()_]+)_Pulses.csv"  
 
     dates = set([re.search(date_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
@@ -130,7 +134,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             pulse_data = pulse_data[~pulse_data.cluster.isin(unwanted_fft)]
             new_len = len(pulse_data)
             print('Dropped', prev_len - new_len, 'lines')
-            
+        
         fp.write(data_destination + '/Labelled_Pulse' + str(flr_num) + '_' + date + '.parq', pulse_data, compression='SNAPPY')
 
     
@@ -151,7 +155,7 @@ def extract_non_labeled_curves(data_source, data_destination, flr_num = 6):
     ---------------------------------------------------------------------------------------------
     returns (None): Write the labelled Pulse shapes on hard disk
     '''
-    assert (flr_num == 6) or (flr_num == 25)
+    assert (flr_num == 6) or (flr_num == 11) or (flr_num == 25) 
     
     nb_files_already_processed = 0
     log_file = data_destination + "/pred_logs.txt" # Register where write the already predicted files

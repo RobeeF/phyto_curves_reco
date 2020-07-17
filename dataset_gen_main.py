@@ -265,15 +265,15 @@ np.savez_compressed('hybrid_L3/valid', X =X_hybrid_valid, y = y_hybrid_valid)
 
 
 ##############################################################################################
-##################### Small SSLAMM data with 9 sets #########################################
+###########################  SSLAMM data with 9 sets #########################################
 ##############################################################################################
 
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 source = "training_9sets/SSLAMM/L2/all_lab"
 
-nb_train_files = 10
-nb_valid_files = 4
-nb_test_files = 4
+nb_train_files = 44
+nb_valid_files = 6
+nb_test_files = 8
 
 nb_files_tvt = [nb_train_files, nb_valid_files, nb_test_files]
 
@@ -289,7 +289,7 @@ X_train, y_train, X_valid, y_valid, X_test, y_test = gen_train_test_valid(source
 end = time()
 print(end - start) # About ... minutes
 
-    
+
 np.save('9sets_L3/X_train_9sets_small_SSLAMM', X_train)
 np.save('9sets_L3/y_train_9sets_small_SSLAMM', y_train)
 
@@ -299,6 +299,9 @@ np.save('9sets_L3/y_valid_9sets_small_SSLAMM', y_valid)
 np.save('9sets_L3/X_test_9sets_small_SSLAMM', X_test)
 np.save('9sets_L3/y_test_9sets_small_SSLAMM', y_test)
 
+
+X_train = np.load('9sets_L3/X_train_9sets_small_SSLAMM.npy')
+np.unique(pd.isna(X_train).sum(axis = (1,2)), return_counts = True)
 
 
 ##############################################################################################
