@@ -185,11 +185,9 @@ for expert in expert_names_list:
 # Create "unbiased" datasets from all manual classifications 
 #====================================================================== 
 
-# Pb: Names are not homogeneous for Lotty...
-
 # To recheck for the missing files. ex cryptophytes
 unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
-
+cc_regex = '_([_ () 0-9A-Za-zµ]+)_Pulses.csv'
 
 #acq = 'SSLAMM-FLR6 2019-10-05 09h59'
 #expert = 'Marrec'
@@ -200,8 +198,19 @@ for acq in acquistion_names_lists:
 
     for expert in expert_names_list:
         print('Expert:', expert)
-        expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert )
-            
+
+        #*******************************
+        # Build a correspondance dict
+        #******************************* 
+        
+        # To link the names of the files and the Original class
+        expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert)
+        ccs_expert = [re.search(cc_regex, name).group(1) for name in expert_Pulse_files_names]
+        ccs_expert = list(set(ccs_expert))
+        ccs_expert_homogeneous = homogeneous_cluster_names(ccs_expert)
+        
+        names_corr = dict(zip(ccs_expert_homogeneous, ccs_expert))
+        
         #*******************************
         # Open Pulse files
         #******************************* 
@@ -215,15 +224,10 @@ for acq in acquistion_names_lists:
                 cluster_ids[cluster] = []
                 continue
             
-        # Pb: Names are not homogeneous for Lotty...
-        #for cluster in cluster_classes:
-            #file_name = acq + '_' + cluster + '_Pulses.csv'
-            
-            
-        for file_name in pulses_files_acq:
-            cluster = re.search(cc_regex, file_name).group(1)
+        for cluster in cluster_classes:
             print(cluster)
-            
+            file_name = acq + '_' + names_corr[cluster] + '_Pulses.csv'
+                        
             if cluster == 'Default (all)':
                 continue
 
@@ -239,6 +243,7 @@ for acq in acquistion_names_lists:
                     print('Empty dataset')
                     continue
             except FileNotFoundError:
+                print(cluster, 'does not exists')
                 cluster_ids[cluster] = []
                 continue
             
@@ -255,7 +260,6 @@ for acq in acquistion_names_lists:
             if len(cluster_ids[cluster]) == 0:
                 cluster_ids[cluster] = deepcopy(ids)
             else:
-                # To check
                 new_indices = set(cluster_ids[cluster]) - set(ids)
                 cluster_ids[cluster] = list(set(cluster_ids[cluster]) - new_indices)
             print('cluster nb particles= ', len(cluster_ids[cluster]))
@@ -271,7 +275,8 @@ for acq in acquistion_names_lists:
         df['cluster'] = cc
         df['acq'] = acq
         unbiased_part = unbiased_part.append(df)
-         
+
+    
 unbiased_part.to_parquet('unbiased_particles.parq', compression = 'snappy',\
                          index = False)
 
