@@ -5,17 +5,15 @@ Created on Thu Apr  9 12:19:22 2020
 @author: rfuchs
 """
 
-import numpy as np
-
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 import os 
-from sklearn.metrics import confusion_matrix
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
+from sklearn.metrics import confusion_matrix, precision_score, recall_score
+from imblearn.under_sampling import EditedNearestNeighbours
 
-os.chdir('C:/Users/rfuchs/Documents/GitHub/planktonPipeline/extract_Pulse_values')
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
 # Load nomenclature
 tn = pd.read_csv('train_test_nomenclature.csv')
@@ -33,6 +31,18 @@ import pandas as pd
 
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 
+
+def prec_rec_function(y_test, preds, cluster_classes, algo):
+    ''' Compute the precision and recall for all classes'''
+    prec = precision_score(y_test, preds, average=None)
+    prec = dict(zip(cluster_classes, prec))
+    prec['algorithm'] = 'knn'
+    
+    recall= recall_score(y_test, preds, average=None)
+    recall = dict(zip(cluster_classes, recall))
+    recall['algorithm'] = algo
+
+    return prec, recall
 
 #===========================================
 # Without undersampling
@@ -167,3 +177,161 @@ precision_score(np.argmax(y_test, 1), np.argmax(y_pred_conv, 1), average = 'weig
 # Quand réduit la taille du jeu de données, NN est vraiment gagnant
 
 
+
+############################################################
+# Training of other algorithms on the unbiased dataset
+############################################################
+import fastparquet as fp
+
+from sklearn.model_selection import train_test_split
+from imblearn.under_sampling import RandomUnderSampler
+
+
+from sklearn import svm
+from sklearn.neighbors import KNeighborsClassifier
+from lightgbm import LGBMClassifier
+from keras.models import Sequential
+from keras.layers import Dense
+
+from sklearn.preprocessing import OneHotEncoder
+
+
+from keras.utils import to_categorical
+y_oh= to_categorical(y_train)
+
+
+cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
+                   'inf1microm_unidentified_particle', 'microphytoplancton',\
+                'picoeucaryote', 'prochlorococcus', \
+                'sup1microm_unidentified_particle', 'synechococcus']
+
+    
+#************************************
+# Data importation 
+#************************************
+
+# TRAIN/TEST SPLIT TO CHANGE 
+
+list_dir = 'C:/Users/rfuchs/Documents/cyto_classif/XP_Listmodes'
+list_files = os.listdir(list_dir)
+
+particles = pd.DataFrame()
+
+for file in list_files:
+    pf = fp.ParquetFile(list_dir + '/' + file)
+    particles_acq = pf.to_pandas()
+    particles = particles.append(particles_acq)
+
+particles = particles.set_index('Particle ID')
+
+X = particles.iloc[:, :-1]
+y = particles.iloc[:, -1]
+
+p = X.shape[1]
+
+# Delete empty columns
+X = X.iloc[:,X.columns != 'Curvature Center of gravity']
+X = X.iloc[:,X.columns != 'Curvature Asymmetry']
+
+# RUS for cleaning data (will be changed)
+rus = RandomUnderSampler()
+X_rs, y_rs = rus.fit_resample(X, y) 
+
+np.unique(y_rs, return_counts = True)
+
+X_train, X_test, y_train, y_test = train_test_split(X_rs, y_rs,\
+                                            test_size=0.166, random_state=42)
+
+    
+#************************************
+# Looking for the best hyperparams 
+#************************************
+    
+
+
+
+#********************************
+# Fitting of the models
+#********************************
+
+# KNN
+knn = KNeighborsClassifier(n_neighbors = 2)
+knn.fit(X_train, y_train)
+
+# SVM
+svm = svm.SVC()
+svm.fit(X_train, y_train)
+
+# LGBM
+lgbm = LGBMClassifier()
+lgbm.fit(X_train, y_train)
+
+# FFNN
+enc = OneHotEncoder(handle_unknown='ignore')
+y_train_oh = enc.fit_transform(y_train.values.reshape(-1, 1))
+
+# define the keras model
+ffnn = Sequential()
+ffnn.add(Dense(32, input_dim = p, activation='relu'))
+ffnn.add(Dense(16, activation='relu'))
+ffnn.add(Dense(9, activation='sigmoid'))
+# compile the keras ffnn
+ffnn.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+# fit the keras ffnn on the dataset
+ffnn.fit(X_train, y_train_oh, epochs=10, batch_size=256)
+
+
+# Add LottyNet !
+
+#********************************
+# Prediction of the models
+#********************************
+
+knn_preds = knn.predict(X_test)  
+svm_preds = svm.predict(X_test)  
+lgbm_preds = lgbm.predict(X_test) 
+ffnn_preds = ffnn.predict(X_test) 
+ffnn_preds = enc.inverse_transform(ffnn_preds)
+
+
+#********************************
+# Accuracy computations
+#********************************
+
+prec = pd.DataFrame(columns= cluster_classes + ['algorithm'])
+recall = pd.DataFrame(columns= cluster_classes + ['algorithm'])
+
+
+# KNN 
+prec_knn, recall_knn = prec_rec_function(y_test, knn_preds, cluster_classes, 'knn')
+prec = prec.append(prec_knn, ignore_index = True)
+recall = recall.append(recall_knn, ignore_index = True)
+
+# SVM
+prec_svm, recall_svm = prec_rec_function(y_test, svm_preds, cluster_classes, 'svm')
+prec = prec.append(prec_svm, ignore_index = True)
+recall = recall.append(recall_svm, ignore_index = True)
+
+
+# LGBM
+prec_lgbm, recall_lgbm = prec_rec_function(y_test, lgbm_preds, cluster_classes, 'lgbm')
+prec = prec.append(prec_lgbm, ignore_index = True)
+recall = recall.append(recall_lgbm, ignore_index = True)
+
+# FFNN
+prec_ffnn, recall_ffnn = prec_rec_function(y_test, ffnn_preds, cluster_classes, 'ffnn')
+prec = prec.append(prec_ffnn, ignore_index = True)
+recall = recall.append(recall_ffnn, ignore_index = True)
+
+#********************************
+# Final output
+#********************************
+
+prec_recall_comp = pd.concat([prec, recall], axis = 1)
+prec_recall_comp.columns = [cc + '_prec' for cc in cluster_classes] + \
+                ['algorithm_prec'] + [cc + '_recall' for cc in cluster_classes] +\
+                    ['algorithm']
+
+prec_recall_comp = prec_recall_comp.drop('algorithm_prec', 1)
+
+prec_recall_comp.set_index('algorithm').to_csv('prec_recall_comp.csv')

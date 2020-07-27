@@ -10,6 +10,7 @@ import re
 import numpy as np
 import pandas as pd
 from copy import deepcopy
+import fastparquet as fp
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 from dataset_preprocessing import homogeneous_cluster_names
@@ -147,11 +148,11 @@ for expert in expert_names_list:
                     file = pd.read_csv(pulse_dirs + '/' + expert + \
                          '/' + file_name, sep = ';', dtype = np.float64,\
                         thousands='.', decimal=',')
-                except pd.errors.EmptyDataError:
+                except (pd.errors.EmptyDataError):
                     print('Empty dataset')
-                    continue
-            
-                        
+                    #continue
+
+                                    
             # 0 is used as particle separation sign in Pulse shapes
             file = file[np.sum(file, axis = 1) != 0] 
              
@@ -184,29 +185,47 @@ for expert in expert_names_list:
 # Create "unbiased" datasets from all manual classifications 
 #====================================================================== 
 
-acq_dict = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
+# Pb: Names are not homogeneous for Lotty...
+
+# To recheck for the missing files. ex cryptophytes
+unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
+
+
+#acq = 'SSLAMM-FLR6 2019-10-05 09h59'
+#expert = 'Marrec'
 
 for acq in acquistion_names_lists:
     print(acq)
-    cluster_ids = dict.fromkeys(cluster_classes)
+    cluster_ids = dict.fromkeys(homogeneous_cluster_names(cluster_classes), [])
 
     for expert in expert_names_list:
         print('Expert:', expert)
-        #expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert )
+        expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert )
             
         #*******************************
         # Open Pulse files
         #******************************* 
-
         pulses_files_acq = [name for name \
                             in expert_Pulse_files_names if re.search(acq, name)]
         pulses_files_acq = [name for name in pulses_files_acq \
                            if not(re.search('lock', name))]
         
-        # Recount the number of particle in each cluster
+        if len(pulses_files_acq) == 0:
+            for cluster in cluster_ids.keys():
+                cluster_ids[cluster] = []
+                continue
+            
+        # Pb: Names are not homogeneous for Lotty...
+        #for cluster in cluster_classes:
+            #file_name = acq + '_' + cluster + '_Pulses.csv'
+            
+            
         for file_name in pulses_files_acq:
             cluster = re.search(cc_regex, file_name).group(1)
             print(cluster)
+            
+            if cluster == 'Default (all)':
+                continue
 
             try:
                 file = pd.read_csv(pulse_dirs + '/' + expert + \
@@ -219,6 +238,9 @@ for acq in acquistion_names_lists:
                 except pd.errors.EmptyDataError:
                     print('Empty dataset')
                     continue
+            except FileNotFoundError:
+                cluster_ids[cluster] = []
+                continue
             
             # Correct the cluster name
             cluster = homogeneous_cluster_names([cluster])[0]
@@ -230,16 +252,131 @@ for acq in acquistion_names_lists:
             ids = np.unique(file['Particle ID'])
             
             # Keep only the ones that were already found
-            if len(cluster_ids[cluster]):
+            if len(cluster_ids[cluster]) == 0:
                 cluster_ids[cluster] = deepcopy(ids)
             else:
                 # To check
                 new_indices = set(cluster_ids[cluster]) - set(ids)
                 cluster_ids[cluster] = list(set(cluster_ids[cluster]) - new_indices)
+            print('cluster nb particles= ', len(cluster_ids[cluster]))
                 
+    for cc in cluster_ids.keys():
+        print(cc, len(cluster_ids[cc])) 
+    print('--------------------------------------------------')
+        
+    # Compile all the remaining particles in a single DataFrame
+    for cc in cluster_ids.keys():
+        df = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
+        df['Particle ID'] = cluster_ids[cc]
+        df['cluster'] = cc
+        df['acq'] = acq
+        unbiased_part = unbiased_part.append(df)
+         
+unbiased_part.to_parquet('unbiased_particles.parq', compression = 'snappy',\
+                         index = False)
+
+#======================================================================
+# Create an unbiased dataset from Pulses and Listmodes
+#====================================================================== 
+
+pf = fp.ParquetFile('unbiased_particles.parq')
+part_to_keep = pf.to_pandas()
+
+#*********************************
+# From Pulses
+#*********************************
+
+dest_repo = 'C:/Users/rfuchs/Documents/cyto_classif'
+
+# Date and FLR regex
+flr_regex = 'FLR([0-9]{1,2})'
+date_regex = "(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})"
+
+for acq_idx, acq_part in part_to_keep.groupby('acq'):
+    acq_name = np.unique(acq_part['acq'])[0]
+    print(acq_name)
+    
+    flr_num = re.search(flr_regex, acq_name).group(1)
+    date = re.search(date_regex, acq_name).group(1)
+    
+    
+    expert_Pulse_files_names = os.listdir(pulse_dirs + '/Lotty')
             
-    # Work to do here            
-    acq_dict.append(cluster_ids)
+    # Open Pulse files
+    pulses_files_acq = [name for name \
+                        in expert_Pulse_files_names if re.search(acq_name, name)]
+    default_pulse = [name for name in pulses_files_acq \
+                       if re.search('Default', name)][0]
+
+    try:
+        file = pd.read_csv(pulse_dirs + '/Lotty/' + \
+                      default_pulse, sep = ';', dtype = np.float64)
+    except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
+        try:
+            file = pd.read_csv(pulse_dirs + '/Lotty/' + \
+                      default_pulse, sep = ';', dtype = np.float64,\
+                thousands='.', decimal=',')
+        except pd.errors.EmptyDataError:
+            print('Empty dataset')
+            continue
+
+    # 0 is used as particle separation sign in Pulse shapes
+    file = file[np.sum(file, axis = 1) != 0] 
+    
+    # Label the unbiased data
+    unbiased_parts = file.merge(acq_part[['Particle ID', 'cluster']])
+
+    fp.write(dest_repo + '/XP_Pulses_L2' + '/Labelled_Pulse' + str(flr_num) + '_' +\
+             date + '.parq', unbiased_parts, compression='SNAPPY')
+
+#*********************************
+# From Listmodes
+#*********************************
+os.chdir('C:/Users/rfuchs/Documents/These/Oceano/XP_biais')
+
+list_dir = 'Listmodes'
+pf = fp.ParquetFile('unbiased_particles.parq')
+part_to_keep = pf.to_pandas()
+
+dest_repo = 'C:/Users/rfuchs/Documents/cyto_classif'
+
+# Date and FLR regex
+flr_regex = 'FLR([0-9]{1,2})'
+date_regex = "(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})"
+
+for acq_idx, acq_part in part_to_keep.groupby('acq'):
+    acq_name = np.unique(acq_part['acq'])[0]
+    print(acq_name)
+    
+    flr_num = re.search(flr_regex, acq_name).group(1)
+    date = re.search(date_regex, acq_name).group(1)
+    
+    expert_List_files_names = os.listdir(list_dir)
             
-            
-            
+    # Open Pulse files
+    list_files_acq = [name for name \
+                        in expert_List_files_names if re.search(acq_name, name)]
+    default_list = [name for name in list_files_acq \
+                       if re.search('Default', name)][0]
+
+    try:
+        file = pd.read_csv(list_dir + '/' +\
+                      default_list, sep = ';', dtype = np.float64)
+    except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
+        try:
+            file = pd.read_csv(list_dir + '/' +\
+                      default_list, sep = ';', dtype = np.float64,\
+                thousands='.', decimal=',')
+        except pd.errors.EmptyDataError:
+            print('Empty dataset')
+            continue
+        
+    # Label the unbiased data
+    unbiased_parts = file.merge(acq_part[['Particle ID', 'cluster']], how = 'inner')
+    
+    print('Keep ', len(unbiased_parts), 'over', len(file), 'particles = ',\
+          len(unbiased_parts) / len(file), '%')
+
+    fp.write(dest_repo + '/XP_Listmodes' + '/Labelled_Pulse' + str(flr_num) + '_' +\
+             date + '.parq', unbiased_parts, compression='SNAPPY')
+

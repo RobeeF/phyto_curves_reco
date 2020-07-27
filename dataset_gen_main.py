@@ -429,3 +429,30 @@ for file in files:
     
     
 crypto / 32
+
+
+##############################################################################################
+####################  XP data with 9 sets (SSLAMM + FUMSECK) #################################
+##############################################################################################
+
+os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
+source = "XP_Pulses_L2"
+
+nb_train_files = 8
+nb_valid_files = 2
+nb_test_files = 2
+
+nb_files_tvt = [nb_train_files, nb_valid_files, nb_test_files]
+
+cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
+                   'inf1microm_unidentified_particle', 'microphytoplancton',\
+                'picoeucaryote', 'prochlorococcus', \
+                'sup1microm_unidentified_particle', 'synechococcus']
+    
+
+start = time()
+X_train, y_train, X_valid, y_valid, X_test, \
+    y_test = gen_train_test_valid(source, cluster_classes, nb_files_tvt, \
+                                 train_umbal_margin = 10000, seed = None)
+end = time()
+print(end - start) # About 3 minutes
