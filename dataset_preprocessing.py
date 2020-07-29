@@ -12,7 +12,8 @@ from sklearn.preprocessing import MinMaxScaler
 from copy import deepcopy
 
 
-def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1], train_umbal_margin = 100, seed = None):
+def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
+                         train_umbal_margin = 100, return_files = False, seed = None):
     ''' Generate a train balanced dataset and a test set with all observations 
     source (str): The location of extracted (and formatted) Pulse files on disk
     cluster_classes (list of str): The classes used in the prediction task
@@ -99,8 +100,13 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1], trai
     with open(log_file, "a") as file:
         for tfile in test_files:
             file.write(tfile + '\n')
-            
-    return X_train, y_train, X_valid, y_valid, X_test, y_test
+    
+    if return_files:
+        return [X_train, y_train, X_valid, y_valid, X_test, y_test], \
+            [file_name_train, file_name_valid, file_name_test],\
+            [pid_list_train, pid_list_valid, pid_list_test]
+    else:
+        return X_train, y_train, X_valid, y_valid, X_test, y_test
     
 
 def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extract_per_group = 100, \

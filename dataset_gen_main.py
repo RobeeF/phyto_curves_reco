@@ -450,9 +450,24 @@ cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                 'sup1microm_unidentified_particle', 'synechococcus']
     
 
+# Test with pid lists
 start = time()
-X_train, y_train, X_valid, y_valid, X_test, \
-    y_test = gen_train_test_valid(source, cluster_classes, nb_files_tvt, \
-                                 train_umbal_margin = 10000, seed = None)
+data, files, pids = gen_train_test_valid(source, cluster_classes, nb_files_tvt, \
+                                 train_umbal_margin = 10000, return_files = True,\
+                                 seed = None)
 end = time()
-print(end - start) # About 3 minutes
+
+X_train, y_train, X_valid, y_valid, X_test, y_test = data
+pids_train, pids_valid, pids_test = pids
+files_train, files_valid, files_test = files
+
+# Files and PIDs selected
+train_parts = pd.DataFrame(data = zip(files_train, pids_train), columns = ['acq', 'Particle ID'])
+valid_parts = pd.DataFrame(data = zip(files_valid, pids_valid), columns = ['acq', 'Particle ID'])
+test_parts = pd.DataFrame(data = zip(files_test, pids_test), columns = ['acq', 'Particle ID'])
+
+# Export the data
+train_parts.to_csv('train_pids.csv')
+valid_parts.to_csv('valid_pids.csv')
+test_parts.to_csv('test_pids.csv')
+

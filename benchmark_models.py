@@ -5,6 +5,7 @@ Created on Thu Apr  9 12:19:22 2020
 @author: rfuchs
 """
 
+import re
 import os 
 import numpy as np
 import pandas as pd
@@ -214,33 +215,74 @@ cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
 
 list_dir = 'C:/Users/rfuchs/Documents/cyto_classif/XP_Listmodes'
 list_files = os.listdir(list_dir)
+parts_to_keep_files = [file for file in list_files if re.search('.csv', file)]
+list_files = [file for file in list_files if re.search('.parq', file)]
 
-particles = pd.DataFrame()
+# Import the list of the selected particles
+pids_df = pd.DataFrame()
+for file in parts_to_keep_files:
+    df = pd.read_csv(list_dir + '/' + file)
+    pids_df = pids_df.append(df)
 
-for file in list_files:
+#==============================================
+# Build the train and test set
+#==============================================
+
+# Train set 
+train_particles = pd.read_csv(list_dir + '/' + 'train_pids.csv')
+train_files = np.unique(train_particles['acq'])
+valid_particles = pd.read_csv(list_dir + '/' + 'valid_pids.csv')
+valid_files = np.unique(valid_particles['acq'])
+
+train = pd.DataFrame()
+
+for file in np.concatenate([train_files, valid_files]):
     pf = fp.ParquetFile(list_dir + '/' + file)
-    particles_acq = pf.to_pandas()
-    particles = particles.append(particles_acq)
+    all_particles = pf.to_pandas()
+    
+    pids = list(pids_df[pids_df['acq'] == file]['Particle ID'])
+    selected_particles = all_particles.set_index('Particle ID').loc[pids]
+    
+    train = train.append(selected_particles)
 
-particles = particles.set_index('Particle ID')
+# Valid set 
+test_particles = pd.read_csv(list_dir + '/' + 'test_pids.csv')
+test_files = np.unique(test_particles['acq'])
 
-X = particles.iloc[:, :-1]
-y = particles.iloc[:, -1]
+test = pd.DataFrame()
 
-p = X.shape[1]
+for file in test_files:
+    pf = fp.ParquetFile(list_dir + '/' + file)
+    all_particles = pf.to_pandas()
+    
+    pids = list(pids_df[pids_df['acq'] == file]['Particle ID'])
+    selected_particles = all_particles.set_index('Particle ID').loc[pids]
+    
+    test = test.append(selected_particles)
+
+#
+X_train = train.iloc[:, :-1]
+y_train = train.iloc[:, -1]
+
+X_test = test.iloc[:, :-1]
+y_test = test.iloc[:, -1]
+
 
 # Delete empty columns
-X = X.iloc[:,X.columns != 'Curvature Center of gravity']
-X = X.iloc[:,X.columns != 'Curvature Asymmetry']
+X_train = X_train.iloc[:, X_train.columns != 'Curvature Center of gravity']
+X_train = X_train.iloc[:, X_train.columns != 'Curvature Asymmetry']
+
+X_test = X_test.iloc[:, X_test.columns != 'Curvature Center of gravity']
+X_test = X_test.iloc[:, X_test.columns != 'Curvature Asymmetry']
+
+p = X_train.shape[1]
+
 
 # RUS for cleaning data (will be changed)
 rus = RandomUnderSampler()
-X_rs, y_rs = rus.fit_resample(X, y) 
+X_train, y_train = rus.fit_resample(X_train, y_train) 
 
-np.unique(y_rs, return_counts = True)
-
-X_train, X_test, y_train, y_test = train_test_split(X_rs, y_rs,\
-                                            test_size=0.166, random_state=42)
+np.unique(y_test, return_counts = True)
 
     
 #************************************
