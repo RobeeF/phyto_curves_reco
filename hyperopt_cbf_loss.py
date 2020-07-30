@@ -46,9 +46,9 @@ def data():
     won't reload data for each evaluation run.
     """
 
-    train = np.load('train.npz')
-    valid = np.load('valid.npz')
-    test = np.load('test.npz')
+    train = np.load('train.npz', allow_pickle = True)
+    valid = np.load('valid.npz', allow_pickle = True)
+    test = np.load('test.npz', allow_pickle = True)
     
     X_train = train['X']
     X_valid = valid['X']
@@ -170,4 +170,4 @@ if __name__ == '__main__':
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_cbf2', save_format = 'h5')
+    best_model.save('ffnn_hyperopt_model_cbf', save_format = 'h5')

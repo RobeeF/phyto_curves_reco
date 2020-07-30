@@ -28,6 +28,7 @@ from keras import optimizers
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
+from sklearn.preprocessing import StandardScaler
 
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
@@ -43,9 +44,9 @@ def data():
     won't reload data for each evaluation run.
     """
 
-    train = np.load('train.npz')
-    valid = np.load('valid.npz')
-    test = np.load('test.npz')
+    train = np.load('train.npz', allow_pickle = True)
+    valid = np.load('valid.npz', allow_pickle = True)
+    test = np.load('test.npz', allow_pickle = True)
     
     X_train = train['X']
     X_valid = valid['X']
@@ -55,6 +56,11 @@ def data():
     y_valid = valid['y']
     y_test = test['y']
     
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_valid = scaler.fit_transform(X_valid)
+    X_test = scaler.fit_transform(X_test)
+
     tn = pd.read_csv('train_test_nomenclature.csv')
     tn.columns = ['Particle_class', 'label']
             
@@ -74,24 +80,24 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     """
     
     dp = {{uniform(0, 0.5)}}
-    
+ 
     N_CLASSES = y_train.shape[1]
     nb_features = X_train.shape[1]
-    
-    sequence_input = tf.keras.layers.Input(shape=(nb_features), dtype='float32')
-    
-    dense2 = tf.keras.layers.Dense(64, activation='relu')(average) # Does using 2*32 layers make sense ?
-    drop2 = tf.keras.layers.Dropout(dp)(dense2)
-    dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
-    drop3 = tf.keras.layers.Dropout(dp)(dense3)
-    dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
-    drop4 = tf.keras.layers.Dropout(dp)(dense4)
+   
+    sequence_input = tf.keras.layers.Input(shape= nb_features, dtype='float32')
 
-    predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
+    
+    dense2 = tf.keras.layers.Dense(32, activation='relu')(sequence_input) # Does using 2*32 layers make sense ?
+    drop2 = tf.keras.layers.Dropout(dp)(dense2)
+    dense3 = tf.keras.layers.Dense(16, activation='relu')(drop2)
+    drop3 = tf.keras.layers.Dropout(dp)(dense3)
+    #dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
+    #drop4 = tf.keras.layers.Dropout(dp)(dense4)
+
+    predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop3)
     
     model = tf.keras.Model(sequence_input, predictions)    
-    
-           
+                   
     #==================================================
     # Specifying the optimizer
     #==================================================
@@ -112,7 +118,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         rad = RectifiedAdam(lr = lr)
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
     
-    
+ 
     # Defining the weights: Take the average over SSLAMM data
     weights = {{choice(['regular', 'sqrt'])}}
     
@@ -124,7 +130,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         w = 1 / np.sqrt(np.sum(y_train, axis = 0))
         w = w / w.sum() 
 
-    w = dict(zip(range(N_CLASSES),w))
+    w = dict(zip(range(N_CLASSES), w))
 
     batch_size = {{choice([64 * 4, 64 * 8])}}
     STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
@@ -162,4 +168,5 @@ if __name__ == '__main__':
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_categ2', save_format = 'h5')
+    best_model.save('ffnn_hyperopt_model_categ', save_format = 'h5')
+    

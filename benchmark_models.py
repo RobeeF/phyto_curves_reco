@@ -10,8 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import confusion_matrix, precision_score, recall_score,\
-    accuracy_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score
 #from imblearn.under_sampling import EditedNearestNeighbours
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
@@ -27,19 +26,14 @@ import fastparquet as fp
 
 from imblearn.under_sampling import RandomUnderSampler
 
-
+from keras import load_model
 from sklearn import svm
 from sklearn.neighbors import KNeighborsClassifier
 from lightgbm import LGBMClassifier
-import tensorflow as tf
-#from tensorflow.keras import Sequential
-#from keras.layers import Dense
 
 from sklearn.preprocessing import OneHotEncoder
 
-from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK, Trials
-from sklearn.model_selection import cross_val_score
-
+from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                    'inf1microm_unidentified_particle', 'microphytoplancton',\
@@ -48,7 +42,6 @@ cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
     
         
 def clf_eval(params):
-    # Test by evaluating on validation set !!!
     ''' Wrapper around classifiers for them to be fed into hyperopt '''
     classif = params['classif']
     del params['classif']
@@ -69,7 +62,18 @@ def clf_eval(params):
     
     return {'loss': -accuracy, 'status': STATUS_OK}
 
- 
+def prec_rec_function(y_test, preds, cluster_classes, algo):
+    ''' Compute the precision and recall for all classes'''
+    prec = precision_score(y_test, preds, average=None)
+    prec = dict(zip(cluster_classes, prec))
+    prec['algorithm'] = algo
+    
+    recall= recall_score(y_test, preds, average=None)
+    recall = dict(zip(cluster_classes, recall))
+    recall['algorithm'] = algo
+    
+    return prec, recall
+
 #************************************
 # Data importation 
 #************************************
@@ -168,20 +172,27 @@ X_tv, y_tv = rus.fit_resample(X_train.append(X_valid), y_train.append(y_valid))
 
 np.unique(y_valid, return_counts = True)
 
+enc = OneHotEncoder(handle_unknown='ignore',  sparse = False)
+y_train_oh = enc.fit_transform(y_train.values.reshape(-1, 1),)
+y_valid_oh = enc.fit_transform(y_valid.values.reshape(-1, 1))
+y_test_oh = enc.fit_transform(y_test.values.reshape(-1, 1))
+
+y_train
 
 os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
 
-np.savez_compressed('XP_Listmodes/train', X = X_train, y = y_train)
-np.savez_compressed('XP_Listmodes/test', X = X_test, y = y_test)
-np.savez_compressed('XP_Listmodes/valid', X =X_valid, y = y_valid)
+np.savez_compressed('XP_Listmodes/train', X = X_train, y = y_train_oh)
+np.savez_compressed('XP_Listmodes/test', X = X_test, y = y_test_oh)
+np.savez_compressed('XP_Listmodes/valid', X = X_valid, y = y_valid_oh)
     
 
+X_valid.isna().sum().sum()
 #************************************
 # Looking for the best hyperparams 
 #************************************
 #from sklearn.model_selection import GridSearchCV
 algo=tpe.suggest
-nb_evals = 16
+nb_evals = 50
 
 # kNN
 nn = (1, 2, 3, 4, 5, 6, 7)
@@ -224,12 +235,6 @@ svm_best = fmin(
     max_evals = nb_evals)
 
 
-svm_clf = GridSearchCV(svm.SVC(), svm_params,\
-                       cv = 3, verbose = 1, n_jobs = -1)
-best_svm = svm_clf.fit(X_tv, y_tv) 
-best_svm.best_params_
-
-
 # Lgbm
 lr = (0.005, 0.01)
 n_est = (8,16,24)
@@ -237,7 +242,6 @@ num_leaves = (6,8,12,16)
 bt = ('gbdt', 'dart')
 objective = ('binary')
 max_bin = (255, 510)
-rs =  (1, 500) # Useless
 colsample_bytree = (0.64, 0.65, 0.66)
 subsample = (0.7,0.75)
 reg_alpha = (1,1.2)
@@ -252,7 +256,6 @@ lgbm_params = {
     'boosting_type': hp.choice('boosting_type', bt), # for better accuracy -> try dart
     'objective': hp.choice('objective', objective),
     'max_bin': hp.choice('max_bin', max_bin), # large max_bin helps improve accuracy but might slow down training progress
-    'random_state': hp.choice('random_state', rs),
     'colsample_bytree': hp.choice('colsample_bytree', colsample_bytree),
     'subsample': hp.choice('subsample', subsample),
     'reg_alpha': hp.choice('reg_alpha', reg_alpha),
@@ -266,42 +269,32 @@ lgbm_best = fmin(
     algo=algo,
     max_evals = nb_evals)
 
-lgbm_clf = GridSearchCV(LGBMClassifier(), lgbm_params,\
-                       cv = 3, verbose = 1, n_jobs = -1)
-best_lgbm = lgbm_clf.fit(X_tv, y_tv) 
-best_lgbm.best_params_
-
 
 #********************************
 # Fitting of the models
 #********************************
 
 # KNN
-
-#best_knn.best_estimator_.fit(X_tv, y_tv)
 knn = KNeighborsClassifier(n_neighbors = nn[knn_best['n_neighbors']], \
                            weights = w[knn_best['weights']], \
                                algorithm = algs[knn_best['algorithm']],
                                p = p_knn[knn_best['p']])
-knn.fit(X_tv, y_tv)
+knn.fit(X_train, y_train)
 
 
 # SVM
-#best_svm.fit(X_train, y_train)
 svm = svm.SVC(kernel = kernel[svm_best['kernel']],\
               gamma = gamma[svm_best['gamma']],
                C = C[svm_best['C']])
 svm.fit(X_train, y_train)
 
 # LGBM
-best_lgbm.fit(X_train, y_train)
 lgbm = LGBMClassifier(learning_rate = lr[lgbm_best['learning_rate']],
     n_estimators = n_est[lgbm_best['n_estimators']],
     num_leaves = num_leaves[lgbm_best['num_leaves']], # large num_leaves helps improve accuracy but might lead to over-fitting
     boosting_type = bt[lgbm_best['boosting_type']], # for better accuracy -> try dart
     objective = objective[lgbm_best['objective']],
     max_bin = max_bin[lgbm_best['max_bin']], # large max_bin helps improve accuracy but might slow down training progress
-    random_state = rs[lgbm_best['random_state']],
     colsample_bytree = colsample_bytree[lgbm_best['colsample_bytree']],
     subsample = subsample[lgbm_best['subsample']],
     reg_alpha = reg_alpha[lgbm_best['reg_alpha']],
@@ -311,23 +304,10 @@ lgbm = LGBMClassifier(learning_rate = lr[lgbm_best['learning_rate']],
 lgbm.fit(X_train, y_train)
 
 # FFNN
-enc = OneHotEncoder(handle_unknown='ignore')
-y_train_oh = enc.fit_transform(y_train.values.reshape(-1, 1))
+ffnn = load_model('trained_models/XP_ffnn')
 
-# define the keras model
-ffnn = Sequential()
-ffnn.add(Dense(32, input_dim = p, activation='relu'))
-ffnn.add(Dense(16, activation='relu'))
-ffnn.add(Dense(9, activation='sigmoid'))
-# compile the keras ffnn
-ffnn.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-# fit the keras ffnn on the dataset
-ffnn.fit(X_train, y_train_oh, epochs=10, batch_size=256)
-
-
-
-
-# Add LottyNet !
+# LottyNet !
+cnn = load_model('trained_models/XP_cnn')
 
 #********************************
 # Prediction of the models
@@ -338,7 +318,8 @@ svm_preds = svm.predict(X_test)
 lgbm_preds = lgbm.predict(X_test) 
 ffnn_preds = ffnn.predict(X_test) 
 ffnn_preds = enc.inverse_transform(ffnn_preds)
-
+cnn_preds = cnn.predict(X_test) 
+cnn_preds = enc.inverse_transform(cnn_preds)
 
 #********************************
 # Accuracy computations
@@ -368,6 +349,13 @@ recall = recall.append(recall_lgbm, ignore_index = True)
 prec_ffnn, recall_ffnn = prec_rec_function(y_test, ffnn_preds, cluster_classes, 'ffnn')
 prec = prec.append(prec_ffnn, ignore_index = True)
 recall = recall.append(recall_ffnn, ignore_index = True)
+
+
+# CNN
+prec_cnn, recall_cnn = prec_rec_function(y_test, cnn_preds, cluster_classes, 'cnn')
+prec = prec.append(prec_cnn, ignore_index = True)
+recall = recall.append(recall_cnn, ignore_index = True)
+
 
 #********************************
 # Final output

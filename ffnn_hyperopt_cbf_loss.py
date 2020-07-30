@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr  9 13:48:42 2020
+Created on Thu Jul 30 11:52:18 2020
 
 @author: rfuchs
 """
-
 
 from __future__ import print_function
 import numpy as np
@@ -20,14 +19,18 @@ import pandas as pd
 from imblearn.under_sampling import RandomUnderSampler
 from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
 from keras.models import Model
+from keras import metrics
 
+from keras import optimizers
+
+from losses import CB_loss
 from sklearn.metrics import confusion_matrix, precision_score
 
 from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
-
-from keras import optimizers
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+from sklearn.preprocessing import StandardScaler
 
 
 ##############################################################################################
@@ -44,9 +47,9 @@ def data():
     won't reload data for each evaluation run.
     """
 
-    train = np.load('train.npz', allow_pickle = True)
-    valid = np.load('valid.npz', allow_pickle = True)
-    test = np.load('test.npz', allow_pickle = True)
+    train = np.load('train.npz')
+    valid = np.load('valid.npz')
+    test = np.load('test.npz')
     
     X_train = train['X']
     X_valid = valid['X']
@@ -56,8 +59,13 @@ def data():
     y_valid = valid['y']
     y_test = test['y']
     
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_valid = scaler.fit_transform(X_valid)
+    X_test = scaler.fit_transform(X_test)
+    
     tn = pd.read_csv('train_test_nomenclature.csv')
-    tn.columns = ['Particle_class', 'label']
+    tn.columns = ['Particle_class', 'label']  
             
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
@@ -78,19 +86,11 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     dp = {{uniform(0, 0.5)}}
     
     N_CLASSES = y_train.shape[1]
-    max_len = X_train.shape[1]
-    nb_curves = X_train.shape[2]
+    nb_features = X_train.shape[1]
     
-    sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
+    sequence_input = tf.keras.layers.Input(shape= nb_features, dtype='float32')
     
-    # A 1D convolution with 128 output channels: Extract features from the curves
-    x = tf.keras.layers.Conv1D(64, 5, activation='relu')(sequence_input)
-    x = tf.keras.layers.Conv1D(32, 5, activation='relu')(x)
-    x = tf.keras.layers.Conv1D(16, 5, activation='relu')(x)
-
-    # Average those features
-    average = tf.keras.layers.GlobalAveragePooling1D()(x)
-    dense2 = tf.keras.layers.Dense(32, activation='relu')(average) # Does using 2*32 layers make sense ?
+    dense2 = tf.keras.layers.Dense(64, activation='relu')(sequence_input) # Does using 2*32 layers make sense ?
     drop2 = tf.keras.layers.Dropout(dp)(dense2)
     dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
     drop3 = tf.keras.layers.Dropout(dp)(dense3)
@@ -99,59 +99,55 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
     predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
     
-    model = tf.keras.Model(sequence_input, predictions)     
+    model = tf.keras.Model(sequence_input, predictions)    
+       
     
-    
+      
     #==================================================
     # Specifying the optimizer
     #==================================================
-  
-    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
-    check = ModelCheckpoint(filepath='w_categ_hyperopt.hdf5',\
-                            verbose = 1, save_best_only=True)
-  
     
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
+    check = ModelCheckpoint(filepath='w_cbf_hyperopt.hdf5',\
+                            verbose = 1, save_best_only=True)  
+        
+        
     optim_ch = {{choice(['adam', 'ranger'])}}
     lr = {{uniform(1e-3, 1e-2)}}
-    
+
     if optim_ch == 'adam':
         optim = tf.keras.optimizers.Adam(lr = lr)
+
     else:
         sync_period = {{choice([2, 6, 10])}}
         slow_step_size = {{normal(0.5, 0.1)}}   
         rad = RectifiedAdam(lr = lr)
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
     
-    
-    # Defining the weights: Take the average over SSLAMM data
-    weights = {{choice(['regular', 'sqrt'])}}
-    
-    if weights == 'regular':
-        w = 1 / np.sum(y_train, axis = 0)
-        w = w / w.sum()            
-        
-    else:
-        w = 1 / np.sqrt(np.sum(y_train, axis = 0))
-        w = w / w.sum() 
-
-    w = dict(zip(range(N_CLASSES),w))
 
     batch_size = {{choice([64 * 4, 64 * 8])}}
     STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
-    STEP_SIZE_VALID = 1 
+    STEP_SIZE_VALID = 1
 
+    beta = {{choice([0.9, 0.99, 0.999, 0.9999, 0.99993])}}
+    gamma = {{uniform(1, 2.2)}}
+    print('gamma value is :', gamma)
+    
+    sample_per_class = np.sum(y_train, axis = 0) 
 
-    model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=optim)
+    model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)], 
+                  metrics=['accuracy'], optimizer = optim)
     
     result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = 60, class_weight = w, shuffle=True, verbose=2, callbacks = [check, es])
-
+                    epochs = 60, shuffle=True, verbose=2, callbacks = [check, es])
 
     #Get the highest validation accuracy of the training epochs
     loss_acc = np.amin(result.history['val_loss']) 
     print('Min loss of epoch:', loss_acc)
     return {'loss': loss_acc, 'status': STATUS_OK, 'model': model}
+
+
 
 
 
@@ -168,9 +164,9 @@ if __name__ == '__main__':
     preds = best_model.predict(X_test)
     print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))  
     print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))  
-    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))  
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))      
     print(confusion_matrix(y_test.argmax(1), preds.argmax(1), labels = list(range(y_test.shape[1]))))
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('hyperopt_model_categ2', save_format = 'h5')
+    best_model.save('hyperopt_model_cbf2', save_format = 'h5')
