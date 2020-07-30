@@ -467,7 +467,7 @@ valid_parts = pd.DataFrame(data = zip(files_valid, pids_valid), columns = ['acq'
 test_parts = pd.DataFrame(data = zip(files_test, pids_test), columns = ['acq', 'Particle ID'])
 
 # Export the data
-train_parts.to_csv('train_pids.csv')
-valid_parts.to_csv('valid_pids.csv')
-test_parts.to_csv('test_pids.csv')
+train_parts.to_csv('train_pids.csv', index = False)
+valid_parts.to_csv('valid_pids.csv', index = False)
+test_parts.to_csv('test_pids.csv', index = False)
 

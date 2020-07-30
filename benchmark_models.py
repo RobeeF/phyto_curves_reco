@@ -9,10 +9,10 @@ import re
 import os 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-from sklearn.metrics import confusion_matrix, precision_score, recall_score
-from imblearn.under_sampling import EditedNearestNeighbours
+from sklearn.metrics import confusion_matrix, precision_score, recall_score,\
+    accuracy_score
+#from imblearn.under_sampling import EditedNearestNeighbours
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 
@@ -20,198 +20,59 @@ os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 tn = pd.read_csv('train_test_nomenclature.csv')
 tn.columns = ['Particle_class', 'label']
 
-###################################################################################################################
-# Evaluate knn : Let the whole sample, should give an advantage 
-###################################################################################################################
-
-from viz_functions import plot_2D
-from time import time
-from scipy.integrate import trapz
-from sklearn.neighbors import KNeighborsClassifier
-import pandas as pd
-
-os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
-
-
-def prec_rec_function(y_test, preds, cluster_classes, algo):
-    ''' Compute the precision and recall for all classes'''
-    prec = precision_score(y_test, preds, average=None)
-    prec = dict(zip(cluster_classes, prec))
-    prec['algorithm'] = 'knn'
-    
-    recall= recall_score(y_test, preds, average=None)
-    recall = dict(zip(cluster_classes, recall))
-    recall['algorithm'] = algo
-
-    return prec, recall
-
-#===========================================
-# Without undersampling
-#===========================================
-
-X_train = np.load('FUMSECK_L3/X_train610.npy')
-y_train = np.load('FUMSECK_L3/y_train610.npy')
-
-X_valid = np.load('FUMSECK_L3/X_valid610.npy')
-y_valid = np.load('FUMSECK_L3/y_valid610.npy')
-
-X_test = np.load('FUMSECK_L3/X_test610.npy')
-y_test = np.load('FUMSECK_L3/y_test610.npy')
-
-# Integrate the curves
-X_train_i = trapz(X_train, axis = 1)
-X_valid_i = trapz(X_valid, axis = 1)
-X_test_i = trapz(X_test, axis = 1)
-
-knn_perfs = pd.DataFrame(columns = ['k', 'micro', 'macro', 'weighted'])
-
-for k in range(1,10):
-    print(k)
-    knn = KNeighborsClassifier(n_neighbors = k)
-    knn.fit(X_train_i, y_train)
-    y_pred_valid = knn.predict(X_valid_i)
-    knn_perfs = knn_perfs.append({'k': k, 'micro': precision_score(y_valid, y_pred_valid, average = 'micro'), \
-                    'macro': precision_score(y_valid, y_pred_valid, average='macro'), 
-                    'weighted': precision_score(y_valid, y_pred_valid, average='weighted')}, 
-                   ignore_index = True)
-
-plt.plot(knn_perfs['k'], knn_perfs['micro'])
-plt.plot(knn_perfs['k'], knn_perfs['macro'])
-plt.plot(knn_perfs['k'], knn_perfs['weighted'])
-
-# k = 2 seems to be best choice !
-
-
-#===========================================
-# With undersampling
-#===========================================
-
-X_train = np.load('FUMSECK_L3/X_train610.npy')
-y_train = np.load('FUMSECK_L3/y_train610.npy')
-
-X_valid = np.load('FUMSECK_L3/X_valid610.npy')
-y_valid = np.load('FUMSECK_L3/y_valid610.npy')
-
-X_test = np.load('FUMSECK_L3/X_test610.npy')
-y_test = np.load('FUMSECK_L3/y_test610.npy')
-
-
-X_integrated = trapz(X_train, axis = 1)
-X_integrated = pd.DataFrame(X_integrated, columns = ['SWS','FWS', 'FL Orange', 'FL Red', 'Curvature'])
-y = y_train.argmax(1)
-  
-# ENN for cleaning data
-enn = EditedNearestNeighbours()
-X_rs, y_rs = enn.fit_resample(X_integrated, y) 
-
-X_train = X_train.take(enn.sample_indices_, axis = 0)
-y_train = y_train.take(enn.sample_indices_, axis = 0)
-
-# Rus to decrease sample size
-balancing_dict = Counter(np.argmax(y_train,axis = 1))
-for class_, obs_nb in balancing_dict.items():
-    if obs_nb > 3000:
-        balancing_dict[class_] = 3000
-
-
-rus = RandomUnderSampler(sampling_strategy = balancing_dict)
-ids = np.arange(len(X_train)).reshape((-1, 1))
-ids_rs, y_train = rus.fit_sample(ids, y_train)
-X_train = X_train[ids_rs.flatten()] 
-
-# Integrate the curves
-X_train_i = trapz(X_train, axis = 1)
-X_valid_i = trapz(X_valid, axis = 1)
-X_test_i = trapz(X_test, axis = 1)
-
-
-knn_perfs = pd.DataFrame(columns = ['k', 'micro', 'macro', 'weighted'])
-
-k = 2
-for k in range(1,10):
-    print(k)
-    knn = KNeighborsClassifier(n_neighbors = k)
-    knn.fit(X_train_i, y_train)
-    y_pred_valid = knn.predict(X_valid_i)
-    knn_perfs = knn_perfs.append({'k': k, 'micro': precision_score(y_valid, y_pred_valid, average = 'micro'), \
-                    'macro': precision_score(y_valid, y_pred_valid, average='macro'), 
-                    'weighted': precision_score(y_valid, y_pred_valid, average='weighted')}, 
-                   ignore_index = True)
-
-plt.plot(knn_perfs['k'], knn_perfs['micro'])
-plt.plot(knn_perfs['k'], knn_perfs['macro'])
-plt.plot(knn_perfs['k'], knn_perfs['weighted'])
-
-# k = 2 seems to be best choice ! (without ENN)
-
-
-###################################################################################################################
-# Evaluate ConvNet 
-###################################################################################################################
-
-from keras.models import load_model
-
-# Performance of knn
-# Load pre-trained model
-LottyNet = load_model('C:/Users/rfuchs/Documents/cyto_classif/LottyNet_FUMSECK') 
-y_pred_conv = LottyNet.predict(X_test)
-
-precision_score(np.argmax(y_test, 1), np.argmax(y_pred_conv, 1), average = 'micro')
-precision_score(np.argmax(y_test, 1), np.argmax(y_pred_conv, 1), average = 'macro')
-precision_score(np.argmax(y_test, 1), np.argmax(y_pred_conv, 1), average = 'weighted')
-
-
-
-###################################################################################################################
-# Final word : Small win of ConvNet
-###################################################################################################################
-
-# Recap:
-# Without undersampling
-#           2-nn not us  2-nn rus   2-nn rus enn   2-nn enn       Convnet
-# micro     0.884963     0.868984   0.844333        0.846938      0.937246
-# macro     0.532623     0.500137   0.491953        0.499227      0.500073
-# weighted  0.964046     0.954315   0.953897        0.955663      0.970292
-
-# Gagne sur micro : + 5 points de pourcentage, perd de 3 sur macro et gagne de 0,6 sur weighted
-# Certaine des petites classes sont un peu mieux représentées par knn sur L'ENSEMBLE DES DONNEES
-# Quand réduit la taille du jeu de données, NN est vraiment gagnant
-
-
-
 ############################################################
 # Training of other algorithms on the unbiased dataset
 ############################################################
 import fastparquet as fp
 
-from sklearn.model_selection import train_test_split
 from imblearn.under_sampling import RandomUnderSampler
 
 
 from sklearn import svm
 from sklearn.neighbors import KNeighborsClassifier
 from lightgbm import LGBMClassifier
-from keras.models import Sequential
-from keras.layers import Dense
+import tensorflow as tf
+#from tensorflow.keras import Sequential
+#from keras.layers import Dense
 
 from sklearn.preprocessing import OneHotEncoder
 
-
-from keras.utils import to_categorical
-y_oh= to_categorical(y_train)
+from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK, Trials
+from sklearn.model_selection import cross_val_score
 
 
 cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                    'inf1microm_unidentified_particle', 'microphytoplancton',\
                 'picoeucaryote', 'prochlorococcus', \
                 'sup1microm_unidentified_particle', 'synechococcus']
-
     
+        
+def clf_eval(params):
+    # Test by evaluating on validation set !!!
+    ''' Wrapper around classifiers for them to be fed into hyperopt '''
+    classif = params['classif']
+    del params['classif']
+    
+    if classif == 'knn':
+        print('knn')
+        clf = KNeighborsClassifier(**params)
+    elif classif == 'svm':
+        print('svm')
+        clf = svm.SVC(**params)
+    elif classif == 'lgbm':
+        print('lgbm')
+        clf = LGBMClassifier(**params)
+        
+    clf.fit(X_train, y_train)
+    pred_valid = clf.predict(X_valid)
+    accuracy = accuracy_score(y_valid, pred_valid)
+    
+    return {'loss': -accuracy, 'status': STATUS_OK}
+
+ 
 #************************************
 # Data importation 
 #************************************
-
-# TRAIN/TEST SPLIT TO CHANGE 
 
 list_dir = 'C:/Users/rfuchs/Documents/cyto_classif/XP_Listmodes'
 list_files = os.listdir(list_dir)
@@ -231,14 +92,13 @@ for file in parts_to_keep_files:
 # Train set 
 train_particles = pd.read_csv(list_dir + '/' + 'train_pids.csv')
 train_files = np.unique(train_particles['acq'])
-valid_particles = pd.read_csv(list_dir + '/' + 'valid_pids.csv')
-valid_files = np.unique(valid_particles['acq'])
-
 train = pd.DataFrame()
 
-for file in np.concatenate([train_files, valid_files]):
+for file in train_files:
     pf = fp.ParquetFile(list_dir + '/' + file)
     all_particles = pf.to_pandas()
+    
+    pp = list(all_particles['Particle ID'])
     
     pids = list(pids_df[pids_df['acq'] == file]['Particle ID'])
     selected_particles = all_particles.set_index('Particle ID').loc[pids]
@@ -246,9 +106,23 @@ for file in np.concatenate([train_files, valid_files]):
     train = train.append(selected_particles)
 
 # Valid set 
+valid = pd.DataFrame()
+valid_particles = pd.read_csv(list_dir + '/' + 'valid_pids.csv')
+valid_files = np.unique(valid_particles['acq'])
+
+
+for file in valid_files:
+    pf = fp.ParquetFile(list_dir + '/' + file)
+    all_particles = pf.to_pandas()
+    
+    pids = list(pids_df[pids_df['acq'] == file]['Particle ID'])
+    selected_particles = all_particles.set_index('Particle ID').loc[pids]
+    
+    valid = valid.append(selected_particles)
+
+# Test test
 test_particles = pd.read_csv(list_dir + '/' + 'test_pids.csv')
 test_files = np.unique(test_particles['acq'])
-
 test = pd.DataFrame()
 
 for file in test_files:
@@ -260,9 +134,12 @@ for file in test_files:
     
     test = test.append(selected_particles)
 
-#
+# Train / testsplit
 X_train = train.iloc[:, :-1]
 y_train = train.iloc[:, -1]
+
+X_valid = valid.iloc[:, :-1]
+y_valid = valid.iloc[:, -1]
 
 X_test = test.iloc[:, :-1]
 y_test = test.iloc[:, -1]
@@ -272,24 +149,127 @@ y_test = test.iloc[:, -1]
 X_train = X_train.iloc[:, X_train.columns != 'Curvature Center of gravity']
 X_train = X_train.iloc[:, X_train.columns != 'Curvature Asymmetry']
 
+X_valid = X_valid.iloc[:, X_valid.columns != 'Curvature Center of gravity']
+X_valid = X_valid.iloc[:, X_valid.columns != 'Curvature Asymmetry']
+
 X_test = X_test.iloc[:, X_test.columns != 'Curvature Center of gravity']
 X_test = X_test.iloc[:, X_test.columns != 'Curvature Asymmetry']
 
 p = X_train.shape[1]
 
-
-# RUS for cleaning data (will be changed)
-rus = RandomUnderSampler()
-X_train, y_train = rus.fit_resample(X_train, y_train) 
-
-np.unique(y_test, return_counts = True)
-
+# RUS for cleaning data (will be changed to SMOTEEN)
+ss = dict()
+for cc in cluster_classes:
+    ss[cc] = min((y_train == cc).sum() + (y_valid == cc).sum(), 2000)
     
+rus = RandomUnderSampler(sampling_strategy = ss)
+    
+X_tv, y_tv = rus.fit_resample(X_train.append(X_valid), y_train.append(y_valid)) 
+
+np.unique(y_valid, return_counts = True)
+
+
+os.chdir('C:/Users/rfuchs/Documents/cyto_classif')
+
+np.savez_compressed('XP_Listmodes/train', X = X_train, y = y_train)
+np.savez_compressed('XP_Listmodes/test', X = X_test, y = y_test)
+np.savez_compressed('XP_Listmodes/valid', X =X_valid, y = y_valid)
+    
+
 #************************************
 # Looking for the best hyperparams 
 #************************************
-    
+#from sklearn.model_selection import GridSearchCV
+algo=tpe.suggest
+nb_evals = 16
 
+# kNN
+nn = (1, 2, 3, 4, 5, 6, 7)
+w = ('uniform','distance')
+algs = ('ball_tree', 'kd_tree', 'brute')
+p_knn = (1, 2, 3)
+
+knn_params = {'classif': 'knn', 'n_neighbors': hp.choice('n_neighbors', nn), 
+               'weights': hp.choice('weights', w),
+               'algorithm': hp.choice('algorithm', algs),\
+                'p': hp.choice('p', p_knn)}
+
+
+knn_best = fmin(
+    fn=clf_eval, 
+    space=knn_params,
+    algo=algo,
+    max_evals = nb_evals)
+
+
+# SVM
+kernel = ('rbf', 'linear')
+gamma = (1e-3, 1e-4)
+C = (1, 10, 100, 1000)
+class_names, nb_samples  =np.unique(y_train, return_counts = True)
+reweighted = dict(zip(class_names, 1/ nb_samples))
+equal_weights = dict(zip(class_names, np.full(len(class_names), 1 / len(class_names))))
+class_weight = (reweighted, equal_weights)
+
+svm_params = {'classif': 'svm',\
+            'kernel': hp.choice('kernel', kernel),\
+            'gamma': hp.choice('gamma', gamma),
+            'C': hp.choice('C', C),\
+            'class_weight': hp.choice('class_weight', class_weight)}
+
+svm_best = fmin(
+    fn=clf_eval, 
+    space=svm_params,
+    algo=algo,
+    max_evals = nb_evals)
+
+
+svm_clf = GridSearchCV(svm.SVC(), svm_params,\
+                       cv = 3, verbose = 1, n_jobs = -1)
+best_svm = svm_clf.fit(X_tv, y_tv) 
+best_svm.best_params_
+
+
+# Lgbm
+lr = (0.005, 0.01)
+n_est = (8,16,24)
+num_leaves = (6,8,12,16)
+bt = ('gbdt', 'dart')
+objective = ('binary')
+max_bin = (255, 510)
+rs =  (1, 500) # Useless
+colsample_bytree = (0.64, 0.65, 0.66)
+subsample = (0.7,0.75)
+reg_alpha = (1,1.2)
+reg_lambda = (1,1.2,1.4)
+is_unbalance = (True, False)
+
+lgbm_params = {
+    'classif': 'lgbm',
+    'learning_rate': hp.choice('learning_rate', lr),
+    'n_estimators': hp.choice('n_estimators', n_est),
+    'num_leaves': hp.choice('num_leaves', num_leaves), # large num_leaves helps improve accuracy but might lead to over-fitting
+    'boosting_type': hp.choice('boosting_type', bt), # for better accuracy -> try dart
+    'objective': hp.choice('objective', objective),
+    'max_bin': hp.choice('max_bin', max_bin), # large max_bin helps improve accuracy but might slow down training progress
+    'random_state': hp.choice('random_state', rs),
+    'colsample_bytree': hp.choice('colsample_bytree', colsample_bytree),
+    'subsample': hp.choice('subsample', subsample),
+    'reg_alpha': hp.choice('reg_alpha', reg_alpha),
+    'reg_lambda':  hp.choice('reg_lambda', reg_lambda),
+    'is_unbalance': hp.choice('is_unbalance', is_unbalance)
+    }
+
+lgbm_best = fmin(
+    fn=clf_eval, 
+    space=lgbm_params,
+    algo=algo,
+    max_evals = nb_evals)
+
+lgbm_clf = GridSearchCV(LGBMClassifier(), lgbm_params,\
+                       cv = 3, verbose = 1, n_jobs = -1)
+best_lgbm = lgbm_clf.fit(X_tv, y_tv) 
+best_lgbm.best_params_
 
 
 #********************************
@@ -297,15 +277,37 @@ np.unique(y_test, return_counts = True)
 #********************************
 
 # KNN
-knn = KNeighborsClassifier(n_neighbors = 2)
-knn.fit(X_train, y_train)
+
+#best_knn.best_estimator_.fit(X_tv, y_tv)
+knn = KNeighborsClassifier(n_neighbors = nn[knn_best['n_neighbors']], \
+                           weights = w[knn_best['weights']], \
+                               algorithm = algs[knn_best['algorithm']],
+                               p = p_knn[knn_best['p']])
+knn.fit(X_tv, y_tv)
+
 
 # SVM
-svm = svm.SVC()
+#best_svm.fit(X_train, y_train)
+svm = svm.SVC(kernel = kernel[svm_best['kernel']],\
+              gamma = gamma[svm_best['gamma']],
+               C = C[svm_best['C']])
 svm.fit(X_train, y_train)
 
 # LGBM
-lgbm = LGBMClassifier()
+best_lgbm.fit(X_train, y_train)
+lgbm = LGBMClassifier(learning_rate = lr[lgbm_best['learning_rate']],
+    n_estimators = n_est[lgbm_best['n_estimators']],
+    num_leaves = num_leaves[lgbm_best['num_leaves']], # large num_leaves helps improve accuracy but might lead to over-fitting
+    boosting_type = bt[lgbm_best['boosting_type']], # for better accuracy -> try dart
+    objective = objective[lgbm_best['objective']],
+    max_bin = max_bin[lgbm_best['max_bin']], # large max_bin helps improve accuracy but might slow down training progress
+    random_state = rs[lgbm_best['random_state']],
+    colsample_bytree = colsample_bytree[lgbm_best['colsample_bytree']],
+    subsample = subsample[lgbm_best['subsample']],
+    reg_alpha = reg_alpha[lgbm_best['reg_alpha']],
+    reg_lambda = reg_lambda[lgbm_best['reg_lambda']],
+    is_unbalance = is_unbalance[lgbm_best['is_unbalance']])
+
 lgbm.fit(X_train, y_train)
 
 # FFNN
@@ -321,6 +323,8 @@ ffnn.add(Dense(9, activation='sigmoid'))
 ffnn.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 # fit the keras ffnn on the dataset
 ffnn.fit(X_train, y_train_oh, epochs=10, batch_size=256)
+
+
 
 
 # Add LottyNet !

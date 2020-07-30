@@ -181,120 +181,12 @@ for expert in expert_names_list:
             print('--------------------------------------')
         
 
-#======================================================================
-# Create "unbiased" datasets from all manual classifications (consensual voting)
-#====================================================================== 
-
-# To delete
-
-# To recheck for the missing files. ex cryptophytes
-unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
-cc_regex = '_([_ () 0-9A-Za-zµ]+)_Pulses.csv'
-
-#acq = 'SSLAMM-FLR6 2019-10-05 09h59'
-#expert = 'Marrec'
-
-len_list = []
-
-for acq in acquistion_names_lists:
-    print(acq)
-    cluster_ids = dict.fromkeys(homogeneous_cluster_names(cluster_classes), [])
-
-    for expert_num, expert in enumerate(expert_names_list):
-        print('Expert:', expert)
-
-        #*******************************
-        # Build a correspondance dict
-        #******************************* 
-        
-        # To link the names of the files and the Original class
-        expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert)
-        ccs_expert = [re.search(cc_regex, name).group(1) for name in expert_Pulse_files_names]
-        ccs_expert = list(set(ccs_expert))
-        ccs_expert_homogeneous = homogeneous_cluster_names(ccs_expert)
-        
-        names_corr = dict(zip(ccs_expert_homogeneous, ccs_expert))
-        
-        #*******************************
-        # Open Pulse files
-        #******************************* 
-        pulses_files_acq = [name for name \
-                            in expert_Pulse_files_names if re.search(acq, name)]
-        pulses_files_acq = [name for name in pulses_files_acq \
-                           if not(re.search('lock', name))]
-        
-        if len(pulses_files_acq) == 0:
-            for cluster in cluster_ids.keys():
-                cluster_ids[cluster] = []
-                continue
-            
-        for cluster in cluster_classes:
-            #print(cluster)
-            file_name = acq + '_' + names_corr[cluster] + '_Pulses.csv'
-                        
-            if cluster == 'Default (all)':
-                continue
-
-            try:
-                file = pd.read_csv(pulse_dirs + '/' + expert + \
-                         '/' + file_name, sep = ';', dtype = np.float64)
-            except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
-                try:
-                    file = pd.read_csv(pulse_dirs + '/' + expert + \
-                         '/' + file_name, sep = ';', dtype = np.float64,\
-                        thousands='.', decimal=',')
-                except pd.errors.EmptyDataError:
-                    print('Empty dataset')
-                    continue
-            except FileNotFoundError:
-                print(cluster, 'does not exists')
-                cluster_ids[cluster] = []
-                continue
-            
-            # Correct the cluster name
-            cluster = homogeneous_cluster_names([cluster])[0]
-                        
-            # 0 is used as particle separation sign in Pulse shapes
-            file = file[np.sum(file, axis = 1) != 0] 
-             
-            # Collect the particle IDs
-            ids = np.unique(file['Particle ID'])
-            
-            # Keep only the particles that were clustered the same way
-            if (len(cluster_ids[cluster]) == 0) & (expert_num == 0):
-                cluster_ids[cluster] = deepcopy(ids)
-            else:
-                new_indices = set(cluster_ids[cluster]) - set(ids)
-                cluster_ids[cluster] = list(set(cluster_ids[cluster]) - new_indices)
-                
-            #print('cluster nb particles= ', len(cluster_ids[cluster]))
-                        
-    # Compile all the remaining particles in a single DataFrame
-    acq_pcles = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
-    for cc in cluster_ids.keys():
-        df = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
-        df['Particle ID'] = cluster_ids[cc]
-        df['cluster'] = cc
-        df['acq'] = acq
-        acq_pcles = acq_pcles.append(df)
-        
-    len_list.append(len(acq_pcles))
-    unbiased_part = unbiased_part.append(acq_pcles)
-    
-
-    
-unbiased_part.to_parquet('unbiased_particles.parq', compression = 'snappy',\
-                         index = False)
 
 #======================================================================
 # Create "unbiased" datasets from all manual classifications (majority voting)
 #====================================================================== 
-from sklearn.preprocessing import OneHotEncoder
 
-# In progress
-# Check that for each file len(dummy) ==  len(default) 
 # Some particles are not present for all participants
-# Small diff with the preceding script
 
 # To recheck for the missing files. ex cryptophytes
 unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
