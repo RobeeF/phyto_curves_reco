@@ -294,6 +294,7 @@ def homogeneous_cluster_names(array):
     if type(array) == pd.core.frame.DataFrame:
         array['cluster'] = array.cluster.str.replace('airbubbles','airbubble')
         array['cluster'] = array.cluster.str.replace('cryptophytes','cryptophyte')
+        array['cluster'] = array.cluster.str.replace('Cryptophyceae','cryptophyte')
 
         array['cluster'] = array.cluster.str.replace('coccolithophorideae like','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('Nano1','nanoeucaryote')
@@ -301,17 +302,27 @@ def homogeneous_cluster_names(array):
         array['cluster'] = array.cluster.str.replace('hsnano','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('HSNano','nanoeucaryote')
         array['cluster'] = array.cluster.str.replace('HSnano','nanoeucaryote')
+        array['cluster'] = array.cluster.str.replace('Nanoeukaryote','nanoeucaryote')
 
         array['cluster'] = array.cluster.str.replace('picohighflr','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('picohighFLR','picoeucaryote')
         array['cluster'] = array.cluster.str.replace('PicoHIGHFLR','picoeucaryote')
+        array['cluster'] = array.cluster.str.replace('PPE 1','picoeucaryote')
+        array['cluster'] = array.cluster.str.replace('PPE 2','picoeucaryote')
         
         array['cluster'] = array.cluster.str.replace('unassigned_particle','noise')
         array['cluster'] = array.cluster.str.replace('unassigned particles','noise')
         array['cluster'] = array.cluster.str.replace('unassigned particle','noise')
-
-        array['cluster'] = array.cluster.str.replace('µ','micro') # Put in the names in singular form
+        
+        array['cluster'] = array.cluster.str.replace('inf1um_unidentified_particle','inf1microm_unidentified_particle')
+        array['cluster'] = array.cluster.str.replace('sup1um_unidentified_particle','sup1microm_unidentified_particle')
+        
+        array['cluster'] = array.cluster.str.replace('Microphytoplankton','microphytoplancton')
+        
+        array['cluster'] = array.cluster.str.replace('µ','micro') 
         array['cluster'] = array.cluster.str.replace('es$','e') # Put in the names in singular form
+        array['cluster'] = array.cluster.str.replace(' ','') # Put in the names in singular form
+
         array['cluster'] = array.cluster.str.lower()
 
         
@@ -319,6 +330,7 @@ def homogeneous_cluster_names(array):
         
         array = [re.sub('airbubbles','airbubble', string) for string in array]
         array = [re.sub('cryptophytes','cryptophyte', string) for string in array]
+        array = [re.sub('Cryptophyceae','cryptophyte', string) for string in array]
 
         array = [re.sub('coccolithophorideae like','nanoeucaryote', string) for string in array]
         array = [re.sub('Nano1','nanoeucaryote', string) for string in array]
@@ -326,17 +338,24 @@ def homogeneous_cluster_names(array):
         array = [re.sub('hsnano','nanoeucaryote', string) for string in array]        
         array = [re.sub('HSNano','nanoeucaryote', string) for string in array]
         array = [re.sub('HSnano','nanoeucaryote', string) for string in array]
+        array = [re.sub('Nanoeukaryote','nanoeucaryote', string) for string in array]
 
         array = [re.sub('picohighflr','picoeucaryotes', string) for string in array]
         array = [re.sub('picohighFLR','picoeucaryote', string) for string in array]
         array = [re.sub('PicoHIGHFLR','picoeucaryotes', string) for string in array]
+        array = [re.sub('PPE 1','picoeucaryotes', string) for string in array]
+        array = [re.sub('PPE 2','picoeucaryotes', string) for string in array]
         
         array = [re.sub('unassigned_particle','noise', string) for string in array]
         array = [re.sub('unassigned particles','noise', string) for string in array]
         array = [re.sub('unassigned particle','noise', string) for string in array]
+        
+        array = [re.sub('Microphytoplankton','microphytoplancton', string) for string in array]
 
         array = [re.sub('µ','micro', string) for string in array]        
         array = [re.sub('es$','e', string) for string in array]
+        array = [re.sub(' ','', string) for string in array]        
+
         array = [string.lower() for string in array]
         array = list(array)
                 

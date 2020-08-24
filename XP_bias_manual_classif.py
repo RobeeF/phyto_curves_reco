@@ -51,7 +51,7 @@ cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
 # Compute average counts and std (biases) over manual classifications
 #====================================================================== 
 # What about spe count ? noise in FLR6 or FLR25 ?
-# CAREFUL: Missing files for Marrec !
+# Check Lotty 1microm parsing error
 
 count_df = pd.DataFrame(columns = ['cluster', 'Count', 'expert', 'acq'])
 
@@ -86,10 +86,27 @@ for expert in expert_names_list:
         
         count_df = count_df.append(counts)
 
-count_df['Count'] = count_df['Count'].astype(int)  
-count_df.groupby(['cluster', 'acq']).agg({'Count': np.mean}) 
-count_df.groupby(['cluster', 'acq']).agg({'Count': np.std}) 
+print(np.unique(count_df["cluster"]))
 
+count_df['Count'] = count_df['Count'].astype(int)  
+mean_count = count_df.groupby(['cluster']).agg({'Count': np.mean}) 
+mean_count = mean_count.reset_index()
+mean_count.columns = ['cluster', 'Mean count']
+
+# To finish, check NaNs
+std_count = count_df.groupby(['acq', 'cluster']).agg({'Count': np.std}).astype(float)
+std_count = std_count.reset_index()
+
+std_count = std_count.groupby(['cluster']).mean().reset_index()
+std_count.columns = ['cluster', 'Count sd']
+
+res_count = mean_count.merge(std_count)
+res_count['inv t stat'] = res_count['Count sd'] / res_count['Mean count']
+res_count.to_csv('total_count.csv')
+
+# Add a differentiated post-treatment for the enriched files (TO DO)  
+mean_count = count_df.groupby(['cluster', 'acq']).agg({'Count': np.mean}) 
+std_count = count_df.groupby(['cluster', 'acq']).agg({'Count': np.std}) 
 
 #======================================================================
 # Check counts computed by Cytoclus == counts from Pulse shapes
@@ -188,7 +205,6 @@ for expert in expert_names_list:
 
 # Some particles are not present for all participants
 
-# To recheck for the missing files. ex cryptophytes
 unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
 cc_regex = '_([_ () 0-9A-Za-zµ]+)_Pulses.csv'
 
@@ -403,3 +419,67 @@ for acq_idx, acq_part in part_to_keep.groupby('acq'):
     fp.write(dest_repo + '/XP_Listmodes' + '/Labelled_Pulse' + str(flr_num) + '_' +\
              date + '.parq', unbiased_parts, compression='SNAPPY')
 
+
+#==============================================================================
+# Create Count files from Pulses (if selection sets were not given)
+#==============================================================================
+
+expert = 'Latimier'
+expert_Pulse_files_names = os.listdir(pulse_dirs + '/' + expert )
+
+for acq in acquistion_names_lists:
+    print(acq)
+    #*******************************
+    # Count from the Pulse shapes
+    #******************************* 
+    pulse_counts = pd.DataFrame(columns = ['cluster', 'Count']) 
+
+    pulses_files_acq = [name for name \
+                        in expert_Pulse_files_names if re.search(acq, name)]
+    pulses_files_acq = [name for name in pulses_files_acq \
+                       if not(re.search('lock', name))]
+    
+    # Recount the number of particle in each cluster
+    for file_name in pulses_files_acq:
+        cluster = re.search(cc_regex, file_name).group(1)
+        
+        try:
+            file = pd.read_csv(pulse_dirs + '/' + expert + \
+                     '/' + file_name, sep = ';', dtype = np.float64)
+        except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
+            try:
+                file = pd.read_csv(pulse_dirs + '/' + expert + \
+                     '/' + file_name, sep = ';', dtype = np.float64,\
+                    thousands='.', decimal=',')
+            except (pd.errors.EmptyDataError):
+                print('Empty dataset')
+                #continue
+
+                                
+        # 0 is used as particle separation sign in Pulse shapes
+        file = file[np.sum(file, axis = 1) != 0] 
+         
+        ids = np.unique(file['Particle ID'])
+        cc_count= len(ids)
+        
+        pulse_counts = pulse_counts.append({'cluster': cluster,\
+                        'Count': cc_count}, ignore_index=True)
+
+    pulse_counts = homogeneous_cluster_names(pulse_counts)
+    pulse_counts = pulse_counts.groupby(['cluster']).sum().reset_index()
+    
+    # Add the missing classes 
+    for cc in cluster_classes:
+        if not(cc in list(pulse_counts['cluster'])):
+            pulse_counts = pulse_counts.append({'cluster': cc, 'Count': 0},\
+                                   ignore_index=True)
+    # Add missing cols
+    pulse_counts['Filename'] = acq + '.cyz'
+    pulse_counts['Concentration'] = np.nan
+    pulse_counts = pulse_counts[['Filename', 'cluster', 'Count', 'Concentration']]
+    pulse_counts.columns = ['Filename', 'Set', 'Count', 'Concentration']
+    
+    # Push it to the right directory (need to be first created manually)
+    pulse_counts.to_csv(count_dirs + expert + '/' + acq + '.csv',\
+                        sep = ';', index = False)
+    
