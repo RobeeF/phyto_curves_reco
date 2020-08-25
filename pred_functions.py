@@ -15,15 +15,17 @@ import re
 from collections import Counter
 from copy import deepcopy
 
-def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth = True):
-    ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
-    source_path (str): The path to the file containing the formatted unlabeled data
-    dest_folder (str): The folder to store the predictions
-    model (ML model): the pre-trained model to use, in order to make predictions
-    ----------------------------------------------------------------------------
-    return (Nonetype): Write the results in a csv on hardisk directly 
-        '''
-    
+
+'''
+source_path = path
+dest_folder = preds_store_folder
+is_ground_truth = False
+scale = False
+import gzip
+'''
+
+def format_data(source_path, dest_folder, scale = False, \
+                is_ground_truth = True, hard_store = False):
     max_len = 120 # The standard length to which is sequence will be broadcasted
 
     pfile = fp.ParquetFile(source_path)
@@ -75,11 +77,58 @@ def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth 
         
         if scale:
             X = scaler(X)
-        
-        
-        #preds_oh = model.predict(X)
-        #preds = correc_pred_thr(tn, thrs, preds_oh)
+            
+        if hard_store:
+            # Store X, total_df, pid_list, true_labels in the same dir
+            file_name = re.search('/([A-Za-z0-9_\- ]+).parq', source_path).group(1)
+                        
+            np.savez_compressed(dest_folder + '/' +  file_name + '_X.npz', X)
+            
+            total_df.to_parquet(dest_folder + '/' + file_name + '_total_df.parq', compression = 'snappy') 
+            np.savez_compressed(dest_folder + '/' + file_name + '_pid_list.npz', pid_list)
 
+            if is_ground_truth:
+                np.savez(dest_folder + '/'+ file_name + '_true_labels.npz', true_labels)
+
+        else:
+            return X, total_df, pid_list, true_labels
+    
+    else:
+        return [], [], [], []
+        
+
+def predict(source_path, dest_folder, model, tn, scale = False,\
+            is_ground_truth = True, precomputed_data_dir = ''):
+    ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
+    source_path (str): The path to the file containing the formatted unlabeled data
+    dest_folder (str): The folder to store the predictions
+    model (ML model): the pre-trained model to use, in order to make predictions
+    precomputed_data_dir (str): A folder where the quantities have been precomputed 
+        using format_data with the hard_store argument
+    ----------------------------------------------------------------------------
+    return (Nonetype): Write the results in a csv on hardisk directly 
+    '''
+    
+    is_precomputed_data = (precomputed_data_dir != '')
+    
+    if is_precomputed_data:
+        file_name = re.search('/([A-Za-z0-9_\- ]+).parq', source_path).group(1)
+            
+        X = np.load(precomputed_data_dir + '/' +  file_name + '_X.npz')['arr_0']
+        
+        pfile = fp.ParquetFile(precomputed_data_dir + '/' + file_name + '_total_df.parq')
+        total_df = pfile.to_pandas()
+            
+        pid_list = np.load(precomputed_data_dir + '/' + file_name + '_pid_list.npz')['arr_0']
+        
+        if is_ground_truth:
+            true_labels = np.load(dest_folder + '/'+ file_name + '_true_labels.npz')['arr_0']
+        
+    else:
+        X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, tn, scale = scale, \
+                        is_ground_truth = is_ground_truth, hard_store = False)
+            
+    if len(X) > 0:
         preds = np.argmax(model.predict(X), axis = 1)
         
         
@@ -118,21 +167,22 @@ def predict(source_path, dest_folder, model, tn, scale = False, is_ground_truth 
 
 
 def correc_pred_thr(tn, thrs, pred_proba):
-  preds = pred_proba.argmax(1)
-  very_confident_pred = deepcopy(preds)
-
-  max_pred_proba = pred_proba.max(1)
-
-  for cl in range(len(tn)):
-    preds_cl_mask = (preds == cl)
-    not_sure_mask = max_pred_proba < thrs[cl]
-    very_confident_pred[not_sure_mask & preds_cl_mask] = 7
-  
-    return very_confident_pred
+    '''When the model is not very confident, classify the observation as noise '''
+    preds = pred_proba.argmax(1)
+    very_confident_pred = deepcopy(preds)
+    
+    max_pred_proba = pred_proba.max(1)
+    
+    for cl in range(len(tn)):
+      preds_cl_mask = (preds == cl)
+      not_sure_mask = max_pred_proba < thrs[cl]
+      very_confident_pred[not_sure_mask & preds_cl_mask] = 7
+    
+      return very_confident_pred
 
 
 def pred_n_count(source_path, model, tn, thrs, exp_count = False):
-    ''' Pred and count on the fly '''
+    ''' Predict the observations and count on the fly '''
     max_len = 120 # The standard length to which is sequence will be broadcasted
     
     #================================================
