@@ -285,8 +285,138 @@ def data_preprocessing(df, balancing_dict = None, max_len = None,  \
     
     return X, seq_len_list, y_list, pid_list 
 
+
 def homogeneous_cluster_names(array):
     ''' Make homogeneous the names of the groups coming from the different Pulse files
+    array (list, numpy 1D array or dataframe): The container in which the names have to be changed
+    -----------------------------------------------------------------------------------------------
+    returns (array): The array with the name changed and the original shape  
+    '''
+    
+    bubble_pat = '[_A-Za-z0-9?\-()]*bubble[_A-Za-z()0-9?\-]*'        
+    crypto_pat = '[_A-Za-z0-9?\-()]*crypto[_A-Za-z()0-9?\-]*'
+    pico_pat = '[_A-Za-z0-9?\-()]*pico[_A-Za-z()0-9?\-]*'
+    nano_pat = '[_A-Za-z0-9?\-()]*nano[_A-Za-z()0-9?\-]*'
+    micro_pat = '[_A-Za-z0-9?\-()]*microp[_A-Za-z()0-9?\-]*'
+    prochlo_pat = '[_A-Za-z0-9?\-()]*prochlo[_A-Za-z()0-9?\-]*'
+    synecho_pat = '[_A-Za-z0-9?\-()]*synecho[_A-Za-z()0-9?\-]*'   
+    #noise_pat = '[_A-Za-z0-9?\-()]*noise[_A-Za-z()0-9?\-]*' 
+    lowfluo_pat = '[_A-Za-z0-9?\-()]*low[ _0-9]{0,1}fluo[_A-Za-z()0-9?\-]*'
+    noiseinf_pat = '[_A-Za-z0-9?\-()]*noise[ _0-9]{0,1}in[fg][_A-Za-z()0-9?\-]*'
+    noisesup_pat = '[_A-Za-z0-9?\-()]*noise[ _0-9]{0,1}sup[_A-Za-z()0-9?\-]*'
+    nophyto_pat = '[_A-Za-z0-9?\-()]*nophyto[_A-Za-z()0-9?\-]*'
+    unassigned_pat = '[_A-Za-z0-9?\-()]*[Uu]nassigned[ _A-Za-z()0-9?\-]*'
+    # Add regex for undertermined
+    # Add regex for unassigned
+        
+    if type(array) == pd.core.frame.DataFrame:
+                
+        array['cluster'] = array.cluster.str.replace('Cryptophyceae','cryptophyte')
+
+        array['cluster'] = array.cluster.str.replace('coccolithophorideae like','nanoeucaryote')
+        array['cluster'] = array.cluster.str.replace('[_A-Za-z0-9?\-()]+naneu[_A-Za-z()0-9?\-]+','nanoeucaryote')
+
+        array['cluster'] = array.cluster.str.replace('PPE 1','picoeucaryote')
+        array['cluster'] = array.cluster.str.replace('PPE 2','picoeucaryote')
+
+ 
+        array['cluster'] = array.cluster.str.replace('New Set 4','inf1microm_unidentified_particle')
+        array['cluster'] = array.cluster.str.replace('New Set 7','inf1microm_unidentified_particle')
+               
+        array['cluster'] = array.cluster.str.replace('A_undetermined','noise')
+        array['cluster'] = array.cluster.str.replace('C_undetermined','noise')
+
+        array['cluster'] = array.cluster.str.replace('inf1um_unidentified_particle','inf1microm_unidentified_particle')
+        array['cluster'] = array.cluster.str.replace('sup1um_unidentified_particle','sup1microm_unidentified_particle')
+        
+        array['cluster'] = array.cluster.str.replace('[_A-Za-z0-9?\-()]+syncho[_A-Za-z()0-9?\-]+','synechococcus')
+
+        array['cluster'] = array['cluster'].str.replace(bubble_pat, 'airbubble', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(crypto_pat, 'cryptophyte', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(pico_pat, 'picoeucaryote', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(nano_pat, 'nanoeucaryote', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(micro_pat, 'microphytoplancton', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(prochlo_pat, 'prochlorococcus', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(synecho_pat, 'synechococcus', regex = True, case = False)
+      
+        array['cluster'] = array['cluster'].str.replace(noiseinf_pat,\
+                        'inf1microm_unidentified_particle', regex = True, case = False)
+
+        array['cluster'] = array['cluster'].str.replace(noisesup_pat,\
+                        'sup1microm_unidentified_particle', regex = True, case = False)
+            
+        array['cluster'] = array['cluster'].str.replace(nophyto_pat,\
+                        'sup1microm_unidentified_particle', regex = True, case = False)
+
+        array['cluster'] = array['cluster'].str.replace(lowfluo_pat,\
+                        'sup1microm_unidentified_particle', regex = True, case = False)
+            
+        array['cluster'] = array['cluster'].str.replace(unassigned_pat,\
+                                                    'noise', regex = True, case = False)
+            
+        array['cluster'] = array.cluster.str.replace('C_noise1','inf1microm_unidentified_particle')
+
+
+        array['cluster'] = array.cluster.str.replace('µ','micro') 
+        array['cluster'] = array.cluster.str.replace('es$','e') # Put in the names in singular form
+        array['cluster'] = array.cluster.str.replace(' ','') # Put in the names in singular form
+
+        array['cluster'] = array.cluster.str.lower()
+
+        
+    else:
+        array = [re.sub('Cryptophyceae','cryptophyte', string) for string in array]
+
+        array = [re.sub('coccolithophorideae like','nanoeucaryote', string) for string in array]
+        array = [re.sub('[_A-Za-z0-9?\-()]+naneu[_A-Za-z()0-9?\-]+','nanoeucaryote', string) for string in array]
+        
+        array = [re.sub('PPE 1','picoeucaryotes', string) for string in array]
+        array = [re.sub('PPE 2','picoeucaryotes', string) for string in array]
+        
+        
+        array = [re.sub('A_undetermined','noise', string) for string in array]
+        array = [re.sub('C_undetermined','noise', string) for string in array]
+
+        array = [re.sub('New Set 7','inf1microm_unidentified_particle', string) for string in array]
+        array = [re.sub('New Set 4','inf1microm_unidentified_particle', string) for string in array]
+        
+
+        array = [re.sub('[_A-Za-z0-9?\-()]+syncho[_A-Za-z()0-9?\-]+','synechococcus', string) for string in array]
+
+        array = [re.sub(bubble_pat,'airbubble', string) for string in array]
+        array = [re.sub(crypto_pat,'cryptophyte', string) for string in array]
+        array = [re.sub(pico_pat,'picoeucaryote', string) for string in array]
+        array = [re.sub(nano_pat,'nanoeucaryote', string) for string in array]
+        array = [re.sub(micro_pat,'microphytoplancton', string) for string in array]
+        array = [re.sub(prochlo_pat,'prochlorococcus', string) for string in array]
+        array = [re.sub(synecho_pat,'synechococcus', string) for string in array]
+        
+        
+        array = [re.sub(noiseinf_pat,'inf1microm_unidentified_particle', string) for string in array]
+        array = [re.sub(noisesup_pat,'sup1microm_unidentified_particle', string) for string in array]
+        
+        array = [re.sub(nophyto_pat,'sup1microm_unidentified_particle', string) for string in array]
+        array = [re.sub(lowfluo_pat,'sup1microm_unidentified_particle', string) for string in array]
+        
+        array = [re.sub(unassigned_pat, 'noise', string) for string in array]
+        array = [re.sub('C_noise1','inf1microm_unidentified_particle', string) for string in array]
+
+
+        array = [re.sub('µ','micro', string) for string in array]        
+        array = [re.sub('es$','e', string) for string in array]
+        array = [re.sub(' ','', string) for string in array]        
+
+        array = [string.lower() for string in array]
+        array = list(array)
+                
+    return array
+
+
+
+
+def homogeneous_cluster_names_(array):
+    ''' Legacy !!
+    Make homogeneous the names of the groups coming from the different Pulse files
     array (list, numpy 1D array or dataframe): The container in which the names have to be changed
     -----------------------------------------------------------------------------------------------
     returns (array): The array with the name changed and the original shape  

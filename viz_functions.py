@@ -9,19 +9,25 @@ import matplotlib.pyplot as plt
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
 
-def plot_2Dcyto(X, y, tn, q1, q2, colors = None):
+def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = None):
     ''' Plot a 2D cytogram of dimension q1 vs dimension q2 
     X (n x curve_length x nb_curves ndarray): The curves representing the particules
     '''
     
     if colors == None:
         #colors = ['#96ceb4', 'gold', 'black', 'green', 'grey', 'red', 'purple', 'blue', 'silver']
-        colors = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red', 'purple', 'blue', 'grey']
+        colors = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red',\
+                  'purple', 'blue', 'brown', 'grey']
 
     fig, ax1 = plt.subplots(1,1, figsize=(12,6))
     for id_, label in enumerate(list(tn['label'])):
         obs = X[y == label]
-        clus_name = list(tn[tn['label'] == label]['Particle_class'])[0]
+        
+        if str_labels:
+            clus_name = label
+        else:
+            clus_name = list(tn[tn['label'] == label]['Particle_class'])[0]
+            
         ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= clus_name, s = 1)
         ax1.legend(loc= 'upper left', shadow=True, fancybox=True, prop={'size':8})
     
@@ -32,7 +38,12 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None):
     ax1.set_ylabel(q2)
     ax1.set_xlim(1, 10**6)
     ax1.set_ylim(1, 10**6)
+    
+    if title != None:
+        plt.savefig(title)
+        
     plt.show()
+
 
 
 
