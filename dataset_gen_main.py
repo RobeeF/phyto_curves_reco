@@ -467,7 +467,11 @@ valid_parts = pd.DataFrame(data = zip(files_valid, pids_valid), columns = ['acq'
 test_parts = pd.DataFrame(data = zip(files_test, pids_test), columns = ['acq', 'Particle ID'])
 
 # Export the data
-train_parts.to_csv('train_pids.csv', index = False)
-valid_parts.to_csv('valid_pids.csv', index = False)
-test_parts.to_csv('test_pids.csv', index = False)
+train_parts.to_csv('XP_Pulses_L2/train_pids.csv', index = False)
+valid_parts.to_csv('XP_Pulses_L2/valid_pids.csv', index = False)
+test_parts.to_csv('XP_Pulses_L2/test_pids.csv', index = False)
 
+
+np.savez_compressed('XP_Pulses_L2/train', X = X_train, y = y_train)
+np.savez_compressed('XP_Pulses_L2/test', X = X_test, y = y_test)
+np.savez_compressed('XP_Pulses_L2/valid', X = X_valid, y = y_valid)

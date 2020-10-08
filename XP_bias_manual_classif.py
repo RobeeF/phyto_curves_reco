@@ -68,8 +68,8 @@ classes_of_interest = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                 'synechococcus', 'noise']
 
 # Noise is useless and would have to account for unmarked particles
-small_cells = ['picoeucaryote', 'synechococcus', 'prochlorococcus', 'airbubbles']
-large_cells = ['cryptophyte', 'nanoeucaryote', 'microphytoplancton', 'airbubbles']
+small_cells = ['picoeucaryote', 'synechococcus', 'prochlorococcus', 'airbubble']
+large_cells = ['cryptophyte', 'nanoeucaryote', 'microphytoplancton', 'airbubble']
 
 def creach_post_processing(acq, data):
     ''' For some of Creach 's acquisitions low_fluo correspond to < 1 micrometre
