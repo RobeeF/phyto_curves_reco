@@ -461,17 +461,26 @@ X_train, y_train, X_valid, y_valid, X_test, y_test = data
 pids_train, pids_valid, pids_test = pids
 files_train, files_valid, files_test = files
 
+
+y_train.sum(0)
+y_valid.sum(0)
+y_test.sum(0)
+
+
 # Files and PIDs selected
 train_parts = pd.DataFrame(data = zip(files_train, pids_train), columns = ['acq', 'Particle ID'])
 valid_parts = pd.DataFrame(data = zip(files_valid, pids_valid), columns = ['acq', 'Particle ID'])
 test_parts = pd.DataFrame(data = zip(files_test, pids_test), columns = ['acq', 'Particle ID'])
 
+# Export the pids
+train_parts.to_csv('XP_Listmodes/train_pids.csv', index = False)
+valid_parts.to_csv('XP_Listmodes/valid_pids.csv', index = False)
+test_parts.to_csv('XP_Listmodes/test_pids.csv', index = False)
+
 # Export the data
-train_parts.to_csv('XP_Pulses_L2/train_pids.csv', index = False)
-valid_parts.to_csv('XP_Pulses_L2/valid_pids.csv', index = False)
-test_parts.to_csv('XP_Pulses_L2/test_pids.csv', index = False)
-
-
 np.savez_compressed('XP_Pulses_L2/train', X = X_train, y = y_train)
 np.savez_compressed('XP_Pulses_L2/test', X = X_test, y = y_test)
 np.savez_compressed('XP_Pulses_L2/valid', X = X_valid, y = y_valid)
+
+
+y_train.sum(0)

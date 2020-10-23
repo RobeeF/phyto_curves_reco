@@ -322,11 +322,10 @@ for expert in expert_names_list:
         
 
 #==============================================================================
-# Create "unbiased" datasets from all manual classifications (voting)
+# Create "unbiased" datasets from all manual classifications (2/3 voting rule)
 #==============================================================================
 
 # Exist duplicated PIDS due to Latimier non exclusive sets
-# Noise work for previous section but not this one !!!
 
 unbiased_part = pd.DataFrame(columns = ['Particle ID', 'cluster', 'acq'])
 
@@ -334,6 +333,8 @@ for acq in acquistion_names_lists:
     print(acq)
     
     all_expert_pid_clusters = pd.DataFrame()
+    
+    # Create a empty dataframe with the right columns and particle number 
     for expert in expert_names_list:
         print('Expert:', expert)
 
@@ -405,7 +406,7 @@ for acq in acquistion_names_lists:
                             print('Empty dataset')
                             continue
                 except FileNotFoundError:
-                    print(cluster, 'does not exists')
+                    #print(cluster, 'does not exists')
                     continue
                                             
                 # 0 is used as particle separation sign in Pulse shapes
@@ -417,13 +418,16 @@ for acq in acquistion_names_lists:
                 pid_cluster = deepcopy(pd.DataFrame(file['Particle ID']))
                 pid_cluster['cluster'] = cluster   
                 pid_cluster = pid_cluster.drop_duplicates()
+                
+                # Plusieurs classes pour une particule ? 
+                #assert len(pid_cluster) == len(set(pid_cluster['Particle ID']))
+                
                 pid_clusters = pid_clusters.append(pid_cluster)
 
         #********************************************************************
         # Add the noise particles of Louchart
         #********************************************************************
          
-        # To check  
         if expert == 'Louchart': 
             file_name_noise = [f for f in pulses_files_acq if re.search('unidentified', f)][0]
             file = pd.read_csv(pulse_dirs + 'Louchart/' + file_name_noise,\
@@ -446,11 +450,15 @@ for acq in acquistion_names_lists:
             
             pid_clusters = pid_clusters.append(inf1um_noise)
             pid_clusters = pid_clusters.append(sup1um_noise)
+
+        #assert len(pid_clusters) == len(set(pid_clusters['Particle ID']))
                 
         #********************************************************************
         # Count how many times the particles have been counted in each class
         #********************************************************************
         dummy_pid_clusters = pd.get_dummies(pid_clusters.set_index('Particle ID'))
+        # Re sum to account for Latimier duplicates
+        dummy_pid_clusters = dummy_pid_clusters.reset_index('Particle ID').groupby('Particle ID').agg('sum')
         
         #a, b = np.unique(pid_clusters['Particle ID'], return_counts = True) 
         #print('Number of duplicates', len(a[b == 2]))
@@ -465,7 +473,7 @@ for acq in acquistion_names_lists:
     # Keep the particles that have been similarly 
     # classified by a majority/all experts
     #********************************************************************
-    
+    print('Number of particle in file', len(all_expert_pid_clusters))
     # Not all experts vote for each particle 
     nb_voting_experts_per_pid = all_expert_pid_clusters.sum(1)
     
@@ -486,7 +494,7 @@ for acq in acquistion_names_lists:
     
     assert len(low_votes) == len(prefered_group) 
     
-    print(np.unique(prefered_group.loc[low_votes], return_counts = True))
+    #print(np.unique(prefered_group.loc[low_votes], return_counts = True))
     
     ################################
     
@@ -527,6 +535,8 @@ date_regex = "(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})"
 pf = fp.ParquetFile('unbiased_particles_twothird.parq')
 part_to_keep = pf.to_pandas()
 
+part_to_keep = part_to_keep.drop_duplicates()
+
 #*********************************
 # From Pulses
 #*********************************
@@ -535,6 +545,7 @@ dest_repo = 'C:/Users/rfuchs/Documents/cyto_classif'
 
 
 for acq_idx, acq_part in part_to_keep.groupby('acq'):
+
     acq_name = np.unique(acq_part['acq'])[0]
     print(acq_name)
     
@@ -566,7 +577,10 @@ for acq_idx, acq_part in part_to_keep.groupby('acq'):
     file = file[np.sum(file, axis = 1) != 0] 
     
     # Label the unbiased data
-    unbiased_parts = file.merge(acq_part[['Particle ID', 'cluster']])
+    unbiased_parts = file.merge(acq_part[['Particle ID', 'cluster']], how = 'inner')
+    
+    print('Keep ', len(set(unbiased_parts['Particle ID'])), 'over', len(set(file['Particle ID'])), 'particles = ',\
+          len(set(unbiased_parts['Particle ID'])) / len(set(file['Particle ID'])), '%')
 
     fp.write(dest_repo + '/XP_Pulses_L2' + '/Labelled_Pulse' + str(flr_num) + '_' +\
              date + '.parq', unbiased_parts, compression='SNAPPY')
@@ -574,11 +588,16 @@ for acq_idx, acq_part in part_to_keep.groupby('acq'):
 #*********************************
 # From Listmodes
 #*********************************
+
+print('--------------------------------------------')
 os.chdir('C:/Users/rfuchs/Documents/These/Oceano/XP_biais')
 
 list_dir = 'Listmodes'
 pf = fp.ParquetFile('unbiased_particles_twothird.parq')
 part_to_keep = pf.to_pandas()
+
+part_to_keep = part_to_keep.drop_duplicates()
+
 
 dest_repo = 'C:/Users/rfuchs/Documents/cyto_classif'
 
@@ -613,6 +632,8 @@ for acq_idx, acq_part in part_to_keep.groupby('acq'):
             print('Empty dataset')
             continue
         
+    print(len(file.columns))
+        
     # Label the unbiased data
     unbiased_parts = file.merge(acq_part[['Particle ID', 'cluster']], how = 'inner')
     
@@ -621,9 +642,16 @@ for acq_idx, acq_part in part_to_keep.groupby('acq'):
 
     fp.write(dest_repo + '/XP_Listmodes' + '/Labelled_Pulse' + str(flr_num) + '_' +\
              date + '.parq', unbiased_parts, compression='SNAPPY')
+    
 
+len(set(unbiased_parts_['Particle ID']))
+len(set(unbiased_parts['Particle ID']))
 
+ccl, count = np.unique(unbiased_parts['Particle ID'], return_counts = True)
+len(ccl[count >= 2])
 
+file[file['Particle ID'] == 4643]
+acq_part[acq_part['Particle ID'] == 4643]['cluster']
 
 #======================================================================
 # Plot uncertainty maps  

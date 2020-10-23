@@ -15,6 +15,7 @@ from hyperas import optim
 from hyperas.distributions import choice, uniform, normal
 
 import os
+import pickle
 from collections import Counter
 import pandas as pd
 from imblearn.under_sampling import RandomUnderSampler
@@ -49,18 +50,18 @@ def data():
     train = np.load('train.npz', allow_pickle = True)
     valid = np.load('valid.npz', allow_pickle = True)
     test = np.load('test.npz', allow_pickle = True)
-    
+
     X_train = train['X']
     X_valid = valid['X']
     X_test = test['X']
-    
+
     y_train = train['y']
     y_valid = valid['y']
     y_test = test['y']
-    
+
     tn = pd.read_csv('train_test_nomenclature.csv')
-    tn.columns = ['Particle_class', 'label']  
-            
+    tn.columns = ['Particle_class', 'label']
+
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
 
@@ -75,16 +76,16 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     The last one is optional, though recommended, namely:
         - model: specify the model just created so that we can later use it again.
     """
-    
-    
+
+
     dp = {{uniform(0, 0.5)}}
-    
+
     N_CLASSES = y_train.shape[1]
     max_len = X_train.shape[1]
     nb_curves = X_train.shape[2]
-    
+
     sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
-    
+
     # A 1D convolution with 128 output channels: Extract features from the curves
     x = tf.keras.layers.Conv1D(64, 5, activation='relu')(sequence_input)
     x = tf.keras.layers.Conv1D(32, 5, activation='relu')(x)
@@ -100,19 +101,19 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     drop4 = tf.keras.layers.Dropout(dp)(dense4)
 
     predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
-    
-    model = tf.keras.Model(sequence_input, predictions)     
-    
-      
+
+    model = tf.keras.Model(sequence_input, predictions)
+
+
     #==================================================
     # Specifying the optimizer
     #==================================================
-    
+
     es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
     check = ModelCheckpoint(filepath='w_cbf_hyperopt.hdf5',\
-                            verbose = 1, save_best_only=True)  
-        
-        
+                            verbose = 1, save_best_only=True)
+
+
     optim_ch = {{choice(['adam', 'ranger'])}}
     lr = {{uniform(1e-3, 1e-2)}}
 
@@ -121,31 +122,32 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
     else:
         sync_period = {{choice([2, 6, 10])}}
-        slow_step_size = {{normal(0.5, 0.1)}}   
+        slow_step_size = {{normal(0.5, 0.1)}}
         rad = RectifiedAdam(lr = lr)
-        optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)        
-    
+        optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
+
 
     batch_size = {{choice([64 * 4, 64 * 8])}}
-    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1 
+    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1
     STEP_SIZE_VALID = 1
 
     beta = {{choice([0.9, 0.99, 0.999, 0.9999, 0.99993])}}
     gamma = {{uniform(1, 2.2)}}
     print('gamma value is :', gamma)
-    
-    sample_per_class = np.sum(y_train, axis = 0) 
 
-    model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)], 
+    sample_per_class = np.sum(y_train, axis = 0)
+
+    model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)],
                   metrics=['accuracy'], optimizer = optim)
-    
+
     result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
                     epochs = 60, shuffle=True, verbose=2, callbacks = [check, es])
 
     #Get the highest validation accuracy of the training epochs
-    loss_acc = np.amin(result.history['val_loss']) 
+    loss_acc = np.amin(result.history['val_loss'])
     print('Min loss of epoch:', loss_acc)
+    model.load_weights('w_cbf_hyperopt.hdf5')
     return {'loss': loss_acc, 'status': STATUS_OK, 'model': model}
 
 
@@ -159,15 +161,17 @@ if __name__ == '__main__':
                                           algo=tpe.suggest,
                                           max_evals=30,
                                           trials=Trials())
-    
+
     X_train, y_train, X_valid, y_valid, X_test, y_test = data()
     print("Evalutation of best performing model:")
     preds = best_model.predict(X_test)
-    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))  
-    print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))  
-    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))      
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))
+    print(precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))
     print(confusion_matrix(y_test.argmax(1), preds.argmax(1), labels = list(range(y_test.shape[1]))))
 
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    best_model.save('ffnn_hyperopt_model_cbf', save_format = 'h5')
+    with open('cnn_cbf_best_params.pickle', 'wb') as handle:
+        pickle.dump(best_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    best_model.save('cnn_hyperopt_model_cbf')
