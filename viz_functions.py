@@ -21,14 +21,13 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = Non
 
     fig, ax1 = plt.subplots(1,1, figsize=(12,6))
     for id_, label in enumerate(list(tn['label'])):
-        obs = X[y == label]
         
         if str_labels:
-            clus_name = label
+            obs = X[y == label]
         else:
-            clus_name = list(tn[tn['label'] == label]['Particle_class'])[0]
-            
-        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= clus_name, s = 1)
+            obs = X[y == id_]
+                        
+        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= label, s = 1)
         ax1.legend(loc= 'upper left', shadow=True, fancybox=True, prop={'size':8})
     
     ax1.set_title('True :' +  q1 + ' vs ' + q2)

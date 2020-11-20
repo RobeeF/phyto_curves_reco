@@ -21,7 +21,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
 from keras.models import Model
 
-from sklearn.metrics import confusion_matrix, precision_score
+from sklearn.metrics import confusion_matrix, precision_score, recall_score
 
 from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
 
@@ -34,6 +34,20 @@ from sklearn.preprocessing import StandardScaler
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
 ##############################################################################################
+
+def prec_rec_function(y_test, preds, cluster_classes, algo):
+    ''' Compute the precision and recall for all classes'''
+    prec = precision_score(y_test, preds, average=None)
+    prec = dict(zip(cluster_classes, prec))
+    prec['algorithm'] = algo
+    
+    recall= recall_score(y_test, preds, average=None)
+    recall = dict(zip(cluster_classes, recall))
+    recall['algorithm'] = algo
+    
+    return prec, recall
+
+
 
 # Tuning include : Sampling strategy (RUS vs RUS + ENN)
 
@@ -172,4 +186,27 @@ if __name__ == '__main__':
     print(best_run)
     with open('ffnn_categ_best_params.pickle', 'wb') as handle:
         pickle.dump(best_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     best_model.save('ffnn_hyperopt_model_categ')
+    #best_model.save('ffnn_hyperopt_model_categ', save_format = 'h5')
+    
+    cluster_classes = ['airbubble',
+     'cryptophyte',
+     'nanoeucaryote',
+     'inf1microm_unidentified_particle',
+     'microphytoplancton',
+     'picoeucaryote',
+     'prochlorococcus',
+     'sup1microm_unidentified_particle',
+     'synechococcus']
+
+    prec = pd.DataFrame(columns= cluster_classes + ['algorithm'])
+    recall = pd.DataFrame(columns= cluster_classes + ['algorithm'])
+
+    prec_ffnn, rec_ffnn = prec_rec_function(y_test.argmax(1), preds.argmax(1), cluster_classes, 'ffnn')
+    
+    prec = prec.append(prec_ffnn, ignore_index = True)
+    prec.to_csv('ffnn_prec.csv')
+
+    recall = recall.append(rec_ffnn, ignore_index = True)
+    recall.to_csv('ffnn_recall.csv')

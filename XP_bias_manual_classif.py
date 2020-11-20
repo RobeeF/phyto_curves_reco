@@ -68,8 +68,8 @@ classes_of_interest = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                 'synechococcus', 'noise']
 
 # Noise is useless and would have to account for unmarked particles
-small_cells = ['picoeucaryote', 'synechococcus', 'prochlorococcus', 'airbubble']
-large_cells = ['cryptophyte', 'nanoeucaryote', 'microphytoplancton', 'airbubble']
+small_cells = ['synechococcus', 'prochlorococcus', 'airbubble']
+large_cells = ['picoeucaryote', 'cryptophyte', 'nanoeucaryote', 'microphytoplancton', 'airbubble']
 
 def creach_post_processing(acq, data):
     ''' For some of Creach 's acquisitions low_fluo correspond to < 1 micrometre
@@ -130,7 +130,7 @@ def creach_post_processing(acq, data):
 # ATTENTION FAIRE OPERATION PAR DATE DANS CETTE PARTIE, A RECHECKER !!!
 # AJOUTER LE NOISE
 
-temp_dir = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/temp_count2/'
+temp_dir = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/temp_count3/'
 
 count_df = pd.DataFrame(columns = ['cluster', 'Count', 'expert', 'acq'])
 

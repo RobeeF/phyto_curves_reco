@@ -16,14 +16,6 @@ from collections import Counter
 from copy import deepcopy
 
 
-'''
-source_path = path
-dest_folder = preds_store_folder
-is_ground_truth = False
-scale = False
-import gzip
-'''
-
 def format_data(source_path, dest_folder, scale = False, \
                 is_ground_truth = True, hard_store = False):
     max_len = 120 # The standard length to which is sequence will be broadcasted
@@ -91,7 +83,10 @@ def format_data(source_path, dest_folder, scale = False, \
                 np.savez(dest_folder + '/'+ file_name + '_true_labels.npz', true_labels)
 
         else:
-            return X, total_df, pid_list, true_labels
+            if is_ground_truth:
+              return X, total_df, pid_list, true_labels
+            else:
+              return X, total_df, pid_list, []
     
     else:
         return [], [], [], []
@@ -125,7 +120,7 @@ def predict(source_path, dest_folder, model, tn, scale = False,\
             true_labels = np.load(dest_folder + '/'+ file_name + '_true_labels.npz')['arr_0']
         
     else:
-        X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, tn, scale = scale, \
+        X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, scale = scale, \
                         is_ground_truth = is_ground_truth, hard_store = False)
             
     if len(X) > 0:

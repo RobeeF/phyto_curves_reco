@@ -14,11 +14,49 @@ import re
 import pandas as pd
 
 from pred_functions import predict, format_data
-from keras.models import load_model
+from tensorflow.keras.models import load_model, model_from_json
+from keras.models import load_model, model_from_json
 
+
+import tensorflow as tf
+tf.__version__
+
+
+dp = 0.2
+
+N_CLASSES = 9
+max_len = 120
+nb_curves = 5
+
+sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
+
+# A 1D convolution with 128 output channels: Extract features from the curves
+x = tf.keras.layers.Conv1D(64, 5, activation='relu')(sequence_input)
+x = tf.keras.layers.Conv1D(32, 5, activation='relu')(x)
+x = tf.keras.layers.Conv1D(16, 5, activation='relu')(x)
+
+# Average those features
+average = tf.keras.layers.GlobalAveragePooling1D()(x)
+dense2 = tf.keras.layers.Dense(32, activation='relu')(average) # Does using 2*32 layers make sense ?
+drop2 = tf.keras.layers.Dropout(dp)(dense2)
+dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
+drop3 = tf.keras.layers.Dropout(dp)(dense3)
+dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
+drop4 = tf.keras.layers.Dropout(dp)(dense4)
+
+predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
+
+model = tf.keras.Model(sequence_input, predictions)
+
+import json 
+
+with open('trained_models/king_cnn.txt') as json_file:
+    config = json.load(json_file)
+    
+model_from_json(config)
 
 # Model and nomenclature loading
-model = load_model('trained_models/LottyNet_FUMSECK')
+model = load_model('trained_models/king_cnn')
 
 tn = pd.read_csv('train_test_nomenclature.csv')
 tn.columns = ['Particle_class', 'label']
@@ -53,10 +91,10 @@ for file in files_to_pred:
             
     if not(is_already_pred): # If not, perform the prediction
         # Predict the values
-        format_data(path, precomputed_data_dir, scale = False, \
-                is_ground_truth = False, hard_store = True)
-        #predict(path, preds_store_folder,  model, tn, \
-            #is_ground_truth = False, precomputed_data_dir = precomputed_data_dir)
+        #format_data(path, precomputed_data_dir, scale = False, \
+                #is_ground_truth = False, hard_store = True)
+        predict(path, preds_store_folder,  model, tn, \
+            is_ground_truth = False, precomputed_data_dir = precomputed_data_dir)
 
         # Write in the logs that this file is already predicted
         with open(log_path, "a") as log_file:

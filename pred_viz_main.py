@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os 
+import re
 from sklearn.metrics import confusion_matrix, precision_score
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
-from losses import CB_loss
-
-
+#from losses import CB_loss
 
 
 ###################################################################################################################
@@ -95,6 +94,7 @@ ax.set_yticklabels([''] + labels)
 plt.xlabel('Predicted') 
 plt.ylabel('True') 
 plt.show()
+
 
 
 #############################################################################################
@@ -311,6 +311,7 @@ set(true.index) - set(a.index)
 #############################################################################################
 # Plot predicted time series : 1st pred
 #############################################################################################
+
 from dataset_preprocessing import homogeneous_cluster_names
 os.chdir('C:/Users/rfuchs/Documents/preds')
 
@@ -545,15 +546,169 @@ for cluster_name in ts.columns:
         #all_clus = all_clus.join(pred_ts_proba_clus)
         
         all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
-        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')
+        #plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')
     else:
         #all_clus = old_pred_ts_clus.join(pred_ts_clus)
         all_clus = pred_ts_clus
         #all_clus = all_clus.join(pred_ts_proba_clus)
         all_clus.plot(alpha=0.5, figsize=(17, 9), marker='.', title = cluster_name)
-        plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')        
+        #plt.savefig('C:/Users/rfuchs/Desktop/pred_P1/' + cluster_name + '.png')        
+        print(cluster_name, 'is not in true_ts pred')
+        
+#############################################################################################
+# Plot predicted time series : 4th pred
+#############################################################################################
+
+from dataset_preprocessing import homogeneous_cluster_names
+os.chdir('C:/Users/rfuchs/Documents/preds')
+
+#==================================================================
+# Old prediction import
+#==================================================================
+old_ts = pd.read_csv('pred2/P1/09_to_12_2019.csv')
+old_ts['date'] =  pd.to_datetime(old_ts['date'], format='%Y-%m-%d %H:%M:%S')
+old_ts = old_ts.set_index('date')
+old_ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
+       'noise', 'airbubble', 'microphytoplancton',
+       'prochlorococcus']
+
+#==================================================================
+# New prediction import
+#==================================================================
+
+#ts = pd.read_csv('pred4/P1/09_to_12_2019_inf_sup.csv')
+#ts = pd.read_csv('pred4/P1/09_to_12_2019.csv')
+ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette.csv')
+
+
+ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
+ts = ts.set_index('date')
+
+#==================================================================
+# True series import
+#==================================================================
+
+true_ts = pd.read_csv('pred4/P1/09_to_12_2019_true_allFLR_Default.csv', sep = ';', engine = 'python')
+#true_ts = pd.read_csv('pred4/P1/09_to_12_2019_true_allFLR.csv', engine = 'python', sep = ';')
+#true_ts = pd.read_csv('pred4/P1/09_to_12_2019_true.csv', engine = 'python', sep = ';')
+
+
+true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%d/%m/%Y %H:%M') # tSBE ...
+#true_ts['Date'] =  pd.to_datetime(true_ts['Datearrondi'], format='%d/%m/%Y %H:%M') # tSBE ...
+#true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%Y-%m-%d %H:%M:%S')
+
+true_ts = true_ts[['Date','count', 'set']]
+true_ts.columns = ['Date','count', 'cluster']
+
+# Drop the NAs
+true_ts = true_ts[~true_ts['cluster'].isna()]
+
+
+# Delete the FLR25 nano and pico
+
+true_ts = true_ts[true_ts['cluster'] != 'nanoeukFLR6']
+true_ts = true_ts[true_ts['cluster'] != 'picoeukFLR6']
+true_ts = true_ts[true_ts['cluster'] != 'picohighFLR6']
+true_ts = true_ts[true_ts['cluster'] != 'cryptophytesFLR6']
+
+
+true_ts['cluster'] = true_ts.cluster.str.replace('inf1Âµm_unidentified_particles','inf1microm_unidentified_particle')
+true_ts['cluster'] = true_ts.cluster.str.replace('sup1Âµm_unidentified_particles','sup1microm_unidentified_particle')
+
+true_ts = homogeneous_cluster_names(true_ts)
+
+# Compute the count of each PFT once the names have been homogeneized
+true_ts = true_ts.groupby(['Date', 'cluster']).sum().reset_index()
+
+# Compute the number of noise particles
+non_noise = true_ts[true_ts['cluster'] != 'defaultflr6'].groupby('Date').sum().reset_index()#['count']
+default_count = true_ts[true_ts['cluster'] == 'defaultflr6']#.reset_index(drop = True)
+
+
+#Try 1
+
+noise = non_noise.merge(default_count, on = 'Date')
+noise['count'] = noise['count_y'] - noise['count_x']
+noise['Date'] = default_count['Date'].values
+noise['cluster'] = 'noise'
+noise = noise[['Date', 'cluster', 'count']]
+true_ts = true_ts[true_ts['cluster'] != 'defaultflr6']
+true_ts = true_ts.append(noise)
+
+
+true_ts = true_ts.set_index('Date')
+true_ts = true_ts.sort_index()
+
+fontsize = 24
+
+title_number = ['a) ', 'b) ', 'c) ', 'd) ', 'e) ', 'f) ']
+interesting_classes = ['picoeucaryote', 'nanoeucaryote',
+        'cryptophyte', 'microphytoplancton',
+        'prochlorococcus', 'synechococcus']
+
+for idx, cluster_name in enumerate(interesting_classes): 
+    pred_ts_clus = pd.DataFrame(ts[cluster_name])
+    pred_ts_clus.columns = ['pred_count']
+    #pred_ts_clus.index = pred_ts_clus.index.floor('H')
+    pred_ts_clus[pred_ts_clus['pred_count'] == 0] = np.nan
+    pred_ts_clus = pred_ts_clus.fillna(method = 'ffill')
+
+    #old_pred_ts_clus = pd.DataFrame(old_ts[cluster_name])
+    #old_pred_ts_clus.columns = ['old_pred_count']
+    #old_pred_ts_clus.index = old_pred_ts_clus.index.floor('H')
+
+    # Translate the name into english
+    printed_cluster_name = re.sub('plancton','plankton',cluster_name)
+    printed_cluster_name = re.sub('eucar','eukar', printed_cluster_name)
+
+    if cluster_name in set(true_ts['cluster']):
+        # Picoeuk comparison: (HighFLR are neglected)
+        true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name]['count'])
+        true_ts_clus.columns = ['true_count']
+           
+        true_ts_clus.index = true_ts_clus.index.floor('H')
+            
+        all_clus = true_ts_clus.join(pred_ts_clus)
+
+    else:
+        all_clus = pd.DataFrame(0, index = pred_ts_clus.index, columns = ['true_count'])
+        all_clus = all_clus.join(pred_ts_clus)
+        #all_clus = pred_ts_clus
+               
         print(cluster_name, 'is not in true_ts pred')
 
+    all_clus.columns = ['Manual Gating', 'Automatic Gating']
+
+    all_clus.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = fontsize)
+
+    #plt.tight_layout(h_pad = 1.0) 
+    #plt.subplots_adjust(top=0.2)
+    
+    if printed_cluster_name in(['synechococcus', 'prochlorococcus']):
+        plt.title(title_number[idx] + '$\it{' + printed_cluster_name.capitalize() + '}$', fontsize = fontsize)
+        plt.xticks(fontsize = fontsize)
+        plt.yticks(fontsize = fontsize)
+        
+    else:
+        plt.title(title_number[idx] +  printed_cluster_name.capitalize(), fontsize = fontsize)
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=True,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False)
+
+    if printed_cluster_name == 'picoeukaryote':
+        plt.legend(all_clus.columns, fontsize = 22)
+    else:
+        plt.legend().remove()
+          
+    plt.xlabel(xlabel = 'time', fontsize = fontsize)
+    plt.ylabel(ylabel = 'Counted particles', fontsize = fontsize)
+
+    plt.savefig('C:/Users/rfuchs/Desktop/pred4_P1/' + cluster_name + '.png')   
+
+        
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)
 ###################################################################################################################
@@ -645,3 +800,23 @@ X = pd.DataFrame(trapz(X_test_SLAAMM, axis = 1), \
                          columns = ['SWS','Total FWS', 'FL Orange', 'Total FLR', 'Curvature'])
 y = y_test_SLAAMM.argmax(1)
 plot_2Dcyto(X,y , tn, 'Total FWS', 'Total FLR', colors = None)
+
+
+#===========================================
+# Viz of the matrix and curves
+#============================================
+
+path = r'C:\Users\rfuchs\Documents\SSLAMM_P1\SSLAMM_L3\X_train.npy'
+X = np.load(path)
+plt.figure(figsize = (8, 2))
+plt.plot(X[2])
+plt.legend(['FWS',	'SWS', 'FL Orange', 'FL Red', 'Curvature'])
+plt.xlim = [1,120]
+plt.show()
+
+plt.imshow(X[2].T, aspect = 3.7)
+plt.xticks([0, 39, 79, 119], ['0', '40', '80', '120'])
+plt.yticks([0, 1, 2, 3, 4], ['FWS',	'SWS', 'FL Orange', 'FL Red', 'Curvature'])
+plt.xlim = [1,5]
+plt.ylim = [1,120]
+plt.show()

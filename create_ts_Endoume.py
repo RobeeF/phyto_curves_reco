@@ -149,6 +149,7 @@ for idx, file in enumerate(files):
 ##########################################################################    
 # Final serie with representative count for the first part of the serie
 ##########################################################################
+
 os.chdir('C:/Users/rfuchs/Documents/preds/pred3/P1')
 phyto_ts = pd.read_csv('SSLAMM_count_17042020.csv')
 phyto_ts = phyto_ts.iloc[:,1:]
