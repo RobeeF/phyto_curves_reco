@@ -565,20 +565,22 @@ os.chdir('C:/Users/rfuchs/Documents/preds')
 #==================================================================
 # Old prediction import
 #==================================================================
+'''
 old_ts = pd.read_csv('pred2/P1/09_to_12_2019.csv')
 old_ts['date'] =  pd.to_datetime(old_ts['date'], format='%Y-%m-%d %H:%M:%S')
+
 old_ts = old_ts.set_index('date')
 old_ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyte',
        'noise', 'airbubble', 'microphytoplancton',
        'prochlorococcus']
-
+'''
 #==================================================================
 # New prediction import
 #==================================================================
 
 #ts = pd.read_csv('pred4/P1/09_to_12_2019_inf_sup.csv')
 #ts = pd.read_csv('pred4/P1/09_to_12_2019.csv')
-ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette.csv')
+ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette_cryptos.csv')
 
 
 ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
@@ -593,6 +595,16 @@ true_ts = pd.read_csv('pred4/P1/09_to_12_2019_true_allFLR_Default.csv', sep = ';
 #true_ts = pd.read_csv('pred4/P1/09_to_12_2019_true.csv', engine = 'python', sep = ';')
 
 
+# Delete the duplicated FLR25 at the beginning of the series
+unwanted_files = ['SSLAMM_FLR25 2019-09-19 14h15.cyz', 'SSLAMM_FLR25 2019-09-19 14h24.cyz',\
+                  'SSLAMM_FLR25 2019-09-19 14h32.cyz', 'SSLAMM_FLR25 2019-10-07 10h26.cyz',\
+                  'SSLAMM_FLR25 2019-10-07 10h19.cyz', 'SSLAMM_FLR25 2019-10-07 10h10.cyz',\
+                  'SSLAMM_FLR25 2019-10-07 10h24.cyz', 'SSLAMM_FLR25 2019-11-09 07h24.cyz',\
+                  'SSLAMM_FLR25 2019-11-13 10h58.cyz', 'SSLAMM_FLR25 2019-11-14 09h50.cyz',\
+                  'SSLAMM_FLR25 2019-11-14 10h15.cyz']
+    
+true_ts = true_ts[~true_ts['Filename'].isin(unwanted_files)]
+
 true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['Datearrondi'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%Y-%m-%d %H:%M:%S')
@@ -603,9 +615,7 @@ true_ts.columns = ['Date','count', 'cluster']
 # Drop the NAs
 true_ts = true_ts[~true_ts['cluster'].isna()]
 
-
 # Delete the FLR25 nano and pico
-
 true_ts = true_ts[true_ts['cluster'] != 'nanoeukFLR6']
 true_ts = true_ts[true_ts['cluster'] != 'picoeukFLR6']
 true_ts = true_ts[true_ts['cluster'] != 'picohighFLR6']
@@ -620,12 +630,17 @@ true_ts = homogeneous_cluster_names(true_ts)
 # Compute the count of each PFT once the names have been homogeneized
 true_ts = true_ts.groupby(['Date', 'cluster']).sum().reset_index()
 
+# Retreat the 2019-10-06 08h07 where there are two FLR25 files in one
+FLR25_particles = ['cryptophyte', 'defaultflr25', 'microphytoplancton',\
+                   'nanoeucaryote', 'picoeucaryote',\
+                   'inf1microm_unidentified_particle', 'sup1microm_unidentified_particle']
+    
+obs_to_correct = (true_ts['Date'] == '2019-10-06 08:00:00') & (true_ts['cluster'].isin(FLR25_particles))
+true_ts['count'] = np.where(obs_to_correct, true_ts['count'] / 2, true_ts['count'])
+
 # Compute the number of noise particles
 non_noise = true_ts[true_ts['cluster'] != 'defaultflr6'].groupby('Date').sum().reset_index()#['count']
 default_count = true_ts[true_ts['cluster'] == 'defaultflr6']#.reset_index(drop = True)
-
-
-#Try 1
 
 noise = non_noise.merge(default_count, on = 'Date')
 noise['count'] = noise['count_y'] - noise['count_x']
@@ -662,7 +677,6 @@ for idx, cluster_name in enumerate(interesting_classes):
     printed_cluster_name = re.sub('eucar','eukar', printed_cluster_name)
 
     if cluster_name in set(true_ts['cluster']):
-        # Picoeuk comparison: (HighFLR are neglected)
         true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name]['count'])
         true_ts_clus.columns = ['true_count']
            
@@ -700,11 +714,17 @@ for idx, cluster_name in enumerate(interesting_classes):
 
     if printed_cluster_name == 'picoeukaryote':
         plt.legend(all_clus.columns, fontsize = 22)
+        plt.ylim([0, 43000])
     else:
         plt.legend().remove()
           
     plt.xlabel(xlabel = 'time', fontsize = fontsize)
     plt.ylabel(ylabel = 'Counted particles', fontsize = fontsize)
+    
+    ecart = (all_clus['Manual Gating'] - all_clus['Automatic Gating']).abs()
+    print('Mean spread', cluster_name, (ecart / all_clus['Automatic Gating']).mean())
+    print('Correlation between the two series', all_clus.corr().iloc[0,1])
+    print('-----------------------------------------------------')
 
     plt.savefig('C:/Users/rfuchs/Desktop/pred4_P1/' + cluster_name + '.png')   
 
@@ -814,9 +834,16 @@ plt.legend(['FWS',	'SWS', 'FL Orange', 'FL Red', 'Curvature'])
 plt.xlim = [1,120]
 plt.show()
 
-plt.imshow(X[2].T, aspect = 3.7)
+plt.imshow(X[1112].T, aspect = 10)
 plt.xticks([0, 39, 79, 119], ['0', '40', '80', '120'])
 plt.yticks([0, 1, 2, 3, 4], ['FWS',	'SWS', 'FL Orange', 'FL Red', 'Curvature'])
 plt.xlim = [1,5]
 plt.ylim = [1,120]
+plt.axis('off')
+plt.tight_layout()
 plt.show()
+
+
+ecart = (all_clus['Manual Gating'] - all_clus['Automatic Gating']).abs()
+(ecart / all_clus['Automatic Gating']).mean()
+1 - 0.01382308631871166
