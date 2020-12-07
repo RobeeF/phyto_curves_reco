@@ -700,7 +700,8 @@ for acq in acquistion_names_lists:
     q2 = 'FL Red Total'
 
     # Original function
-    plot_2Dcyto(full_file, full_file['pred_class'], tn, q1, q2, str_labels = True, title = fig_repo + acq)
+    plot_2Dcyto(full_file, full_file['pred_class'], tn, q1, q2, str_labels = True,\
+                title = fig_repo + acq)
 
 
 
