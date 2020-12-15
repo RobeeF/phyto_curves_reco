@@ -580,11 +580,12 @@ old_ts.columns = ['picoeucaryote', 'synechococcus', 'nanoeucaryote', 'cryptophyt
 
 #ts = pd.read_csv('pred4/P1/09_to_12_2019_inf_sup.csv')
 #ts = pd.read_csv('pred4/P1/09_to_12_2019.csv')
-ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette_cryptos.csv')
+ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette_cryptos_phrochlo2.csv')
 
 
 ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
 ts = ts.set_index('date')
+
 
 #==================================================================
 # True series import
@@ -605,12 +606,14 @@ unwanted_files = ['SSLAMM_FLR25 2019-09-19 14h15.cyz', 'SSLAMM_FLR25 2019-09-19 
     
 true_ts = true_ts[~true_ts['Filename'].isin(unwanted_files)]
 
+true_ts['analysed volume'] = true_ts['count'] / true_ts['concentration'] 
+
 true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['Datearrondi'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%Y-%m-%d %H:%M:%S')
 
-true_ts = true_ts[['Date','count', 'set']]
-true_ts.columns = ['Date','count', 'cluster']
+true_ts = true_ts[['Date','count', 'set', 'analysed volume']]
+true_ts.columns = ['Date','count', 'cluster', 'analysed volume']
 
 # Drop the NAs
 true_ts = true_ts[~true_ts['cluster'].isna()]
@@ -620,7 +623,6 @@ true_ts = true_ts[true_ts['cluster'] != 'nanoeukFLR6']
 true_ts = true_ts[true_ts['cluster'] != 'picoeukFLR6']
 true_ts = true_ts[true_ts['cluster'] != 'picohighFLR6']
 true_ts = true_ts[true_ts['cluster'] != 'cryptophytesFLR6']
-
 
 true_ts['cluster'] = true_ts.cluster.str.replace('inf1Âµm_unidentified_particles','inf1microm_unidentified_particle')
 true_ts['cluster'] = true_ts.cluster.str.replace('sup1Âµm_unidentified_particles','sup1microm_unidentified_particle')
@@ -661,16 +663,16 @@ interesting_classes = ['picoeucaryote', 'nanoeucaryote',
         'cryptophyte', 'microphytoplancton',
         'prochlorococcus', 'synechococcus']
 
+#================================================
+# Plot the manual and automatic gatings
+#================================================
+
 for idx, cluster_name in enumerate(interesting_classes): 
     pred_ts_clus = pd.DataFrame(ts[cluster_name])
     pred_ts_clus.columns = ['pred_count']
-    #pred_ts_clus.index = pred_ts_clus.index.floor('H')
+
     pred_ts_clus[pred_ts_clus['pred_count'] == 0] = np.nan
     pred_ts_clus = pred_ts_clus.fillna(method = 'ffill')
-
-    #old_pred_ts_clus = pd.DataFrame(old_ts[cluster_name])
-    #old_pred_ts_clus.columns = ['old_pred_count']
-    #old_pred_ts_clus.index = old_pred_ts_clus.index.floor('H')
 
     # Translate the name into english
     printed_cluster_name = re.sub('plancton','plankton',cluster_name)
@@ -725,10 +727,118 @@ for idx, cluster_name in enumerate(interesting_classes):
     print('Mean spread', cluster_name, (ecart / all_clus['Automatic Gating']).mean())
     print('Correlation between the two series', all_clus.corr().iloc[0,1])
     print('-----------------------------------------------------')
+    
+    plt.show()
+    #plt.savefig('C:/Users/rfuchs/Desktop/pred4_P1/' + cluster_name + '.png')   
 
-    plt.savefig('C:/Users/rfuchs/Desktop/pred4_P1/' + cluster_name + '.png')   
 
+#================================================
+# Plot the hour histogram of spreads 
+#================================================
+for idx, cluster_name in enumerate(interesting_classes): 
+    pred_ts_clus = pd.DataFrame(ts[cluster_name])
+    pred_ts_clus.columns = ['pred_count']
+
+    pred_ts_clus[pred_ts_clus['pred_count'] == 0] = np.nan
+    pred_ts_clus = pred_ts_clus.fillna(method = 'ffill')
+
+    # Translate the name into english
+    printed_cluster_name = re.sub('plancton','plankton',cluster_name)
+    printed_cluster_name = re.sub('eucar','eukar', printed_cluster_name)
+
+    if cluster_name in set(true_ts['cluster']):
+        true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name][['count', 'analysed volume']])
+        #true_ts_clus = pd.DataFrame(true_ts[true_ts['cluster'] == cluster_name]['count'])
+
+        true_ts_clus.columns = ['true_count', 'vol']
+           
+        true_ts_clus.index = true_ts_clus.index.floor('H')
+            
+        all_clus = true_ts_clus.join(pred_ts_clus)
+
+    else:
+        all_clus = pd.DataFrame(0, index = pred_ts_clus.index, columns = ['count', 'analysed volume'])
+
+        #all_clus = pd.DataFrame(0, index = pred_ts_clus.index, columns = ['true_count'])
+        all_clus = all_clus.join(pred_ts_clus)
+        #all_clus = pred_ts_clus
+               
+        print(cluster_name, 'is not in true_ts pred')
+
+    all_clus.columns = ['Manual Gating', 'vol', 'Automatic Gating']
+
+
+    a = all_clus.reset_index()
+    # Delete zero counts entries because cannot retrieve the concentration
+    a = a[a['vol'] != 0]
         
+    a['hour'] = a.Date.dt.hour.to_list()
+    count_values = a.groupby('hour').size()
+    unwanted_hours = count_values[count_values <= 5].index.to_list()
+    a = a[~a['hour'].isin(unwanted_hours)]
+    
+    import seaborn as sns
+    
+    a['Manual Gating'] = a['Manual Gating'] / a['vol']
+    a['Automatic Gating'] = a['Automatic Gating'] / a['vol']
+    
+    b= a[['hour', 'Automatic Gating']]
+    b['Gating type'] = 'Automatic'
+    b.columns = ['hour', 'Abundance', 'Gating type']
+    
+    c = a[['hour', 'Manual Gating']]
+    c['Gating type'] = 'Manual'
+    c.columns = ['hour', 'Abundance (10*3 cells/mL)', 'Gating type']
+    
+    d = c.append(b)    
+    
+    sns.boxplot(y='Abundance (10*3 cells/mL)', x='hour', 
+                 data=d, 
+                 palette="colorblind",
+                 hue='Gating type', 
+                 showfliers = False)
+     
+    #a['spread'] = ((a['Manual Gating'] - a['Automatic Gating']) / (a['vol'] * a['Manual Gating']) ).abs().to_list()
+    #plt.plot(a.groupby('hour')['spread'].mean())
+    plt.title(printed_cluster_name) 
+    plt.show()
+        
+    plt.savefig('C:/Users/rfuchs/Desktop/spreads/' + cluster_name + '.png')   
+
+
+#=========================================================
+# Check total phyto particles recognized
+#=========================================================
+
+auto_phyto_sum = ts.iloc[:,[1, 2, 3, 4, 6]].sum(axis = 1)
+auto_phyto_sum.name = 'Auto sum'
+
+manual_phyto_sum = true_ts[true_ts['cluster'].isin(['cryptophyte',
+ 'microphytoplancton',
+ 'nanoeucaryote',
+ 'picoeucaryote',
+ #'prochlorococcus',
+ 'synechococcus'])].groupby(['Date']).sum()
+
+
+phyto_sum = manual_phyto_sum.join(auto_phyto_sum)
+phyto_sum = phyto_sum.dropna()
+#phyto_sum['count'] = phyto_sum['count'] / phyto_sum['analysed volume']
+#phyto_sum['Auto sum'] = phyto_sum['Auto sum'] / phyto_sum['analysed volume']
+phyto_sum = phyto_sum[['count', 'Auto sum']]
+phyto_sum.columns = ['Manual Gating', 'Automatic Gating']
+plt.plot(phyto_sum)
+plt.title('Total Phytoplankton particles recognized')
+plt.legend(['Manual Gating', 'Automatic Gating'])
+
+
+(phyto_sum['Manual Gating'] - phyto_sum['Automatic Gating']).abs().max()
+
+
+
+#phyto_sum = phyto_sum[phyto_sum['Automatic Gating'] <= 12.5]
+((phyto_sum['Manual Gating'] - phyto_sum['Automatic Gating']) / phyto_sum['Manual Gating']).abs().mean()
+
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)
 ###################################################################################################################
