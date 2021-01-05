@@ -11,8 +11,8 @@ The classes predicted correspond to six cPFGs:
 - Prochlorococcus
 
 In addition three other classes of particles can be identified by the Network
-- Noise particles smaller than 1 $\mu{m}$
-- Noise particles bigger than 1 $\mu{m}$
+- Noise particles smaller than 1 $`\mu{m}`$
+- Noise particles bigger than 1 $`\mu{m}`$
 - Airbubbles
 
 The final package will soon be available (February 2021).
