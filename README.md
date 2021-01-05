@@ -34,7 +34,7 @@ data_destination = <dest_folder>
 flr_num = 25 # And 6
 
 # Extract the data
-extract_non_labeled_curves(data_source, data_destination, flr_num = 6) # trFLR6 acquisitions
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6) # FLR6 acquisitions
 extract_non_labeled_curves(data_source, data_destination, flr_num = 25) # FLR25 acquisitions
 ```
 
