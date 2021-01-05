@@ -13,7 +13,6 @@ import re
 from sklearn.metrics import confusion_matrix, precision_score
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
-#from losses import CB_loss
 
 
 ###################################################################################################################
@@ -608,6 +607,8 @@ true_ts = true_ts[~true_ts['Filename'].isin(unwanted_files)]
 
 true_ts['analysed volume'] = true_ts['count'] / true_ts['concentration'] 
 
+
+
 true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['Datearrondi'], format='%d/%m/%Y %H:%M') # tSBE ...
 #true_ts['Date'] =  pd.to_datetime(true_ts['tSBE'], format='%Y-%m-%d %H:%M:%S')
@@ -838,6 +839,89 @@ plt.legend(['Manual Gating', 'Automatic Gating'])
 
 #phyto_sum = phyto_sum[phyto_sum['Automatic Gating'] <= 12.5]
 ((phyto_sum['Manual Gating'] - phyto_sum['Automatic Gating']) / phyto_sum['Manual Gating']).abs().mean()
+
+
+#=========================================================
+# Preds on P1
+#=========================================================
+
+from copy import deepcopy
+
+interesting_classes = ['picoeucaryote', 'nanoeucaryote',
+        'cryptophyte', 'microphytoplancton',
+        'prochlorococcus', 'synechococcus']
+
+ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette_cryptos_phrochlo2.csv')
+ts = ts[['date'] + interesting_classes]
+
+
+
+
+
+
+#=========================================================
+# Preds on P2
+#=========================================================
+
+from copy import deepcopy
+
+interesting_classes = ['picoeucaryote', 'nanoeucaryote',
+        'cryptophyte', 'microphytoplancton',
+        'prochlorococcus', 'synechococcus']
+
+ts = pd.read_csv('pred4/P2/02_to_06_2020_concentration.csv')
+ts = ts[['date'] + interesting_classes]
+
+ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
+ts = ts.set_index('date')
+
+
+for col in ts.columns:
+    ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 12)
+    plt.title(col, fontsize = 24)
+    plt.savefig('C:/Users/rfuchs/Desktop/preds_P2/' + col + '.png' )
+    plt.show()
+    
+
+ts_P2 = deepcopy(ts)
+
+
+#=========================================================
+# Preds on P3
+#=========================================================
+os.chdir('C:/Users/rfuchs/Documents/preds')
+
+interesting_classes = ['picoeucaryote', 'nanoeucaryote',
+        'cryptophyte', 'microphytoplancton',
+        'prochlorococcus', 'synechococcus']
+
+
+ts = pd.read_csv('pred4/P3/06_to_07_2020_concentration.csv')
+ts = ts[['date'] + interesting_classes]
+ts = ts.set_index('date')
+
+for col in ts.columns:
+    ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 12)
+    plt.title(col, fontsize = 24)
+    plt.savefig('C:/Users/rfuchs/Desktop/preds_P3/' + col + '.png' )
+    plt.show()
+
+
+
+#=========================================================
+# Preds on P2 et P3
+#=========================================================
+
+tot_ts = ts_P2.append(ts)
+
+for col in tot_ts.columns:
+    tot_ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10)
+    plt.title(col, fontsize = 24)
+    plt.ylabel('Concentration (cells per $\mu{l}$)')
+    plt.savefig('C:/Users/rfuchs/Desktop/preds_P2_P3/' + col + '.png' )
+    plt.show()
+    
+tot_ts.to_csv('pred4/P2_P3_concentration.csv')
 
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)

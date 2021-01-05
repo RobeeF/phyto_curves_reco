@@ -193,3 +193,192 @@ for idx in idx_pbs:
     phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
 
 phyto_rpz_ts.to_csv('C:/Users/rfuchs/Documents/02_to_03_2020.csv', index = False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import re
+import os
+import pandas as pd
+import numpy as np
+
+# Fetch the files 
+pred_folder =  r"C:\Users\rfuchs\Documents\cyto_classif\SSLAMM_P3\Preds"
+pred_files = os.listdir(pred_folder)
+
+pulse_regex = "Pulse" 
+date_regex = "Pulse[0-9]{1,2}_(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:u|h)[0-9]{2})"
+flr_regex = 'Pulse([0-9]{1,2})'
+
+files = [file for file in pred_files if re.search(pulse_regex, file)] # The files containing the data to predict
+
+
+
+
+
+sum_files_repo = "C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3/summary"
+
+phyto_ts = pd.DataFrame(columns = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
+                   'inf1microm_unidentified_particle', 'microphytoplancton',\
+                'picoeucaryote', 'prochlorococcus', \
+                'sup1microm_unidentified_particle', 'synechococcus', 'date', 'FLR'])
+
+
+SWS_noise_thr = 70
+FWS_crypto_thr = 1E4
+FWS_micros_thr = 2 * 10 ** 5
+
+unwanted_files = []
+
+
+for file in files:
+    if file in unwanted_files:
+      print(file)
+      continue
+      
+    path = pred_folder + '/' + file
+    cl_count = pd.read_csv(path, usecols = ['Pred FFT Label', 'Total FWS', 'Total SWS'])
+
+    # For cryptos, micros and phrochlo post processing
+    real_cryptos = np.logical_and(cl_count['Total FWS'] >= FWS_crypto_thr, cl_count['Pred FFT Label'] == 'cryptophyte').sum()
+    real_microphytos = np.logical_and(cl_count['Total FWS'] >= FWS_micros_thr, cl_count['Pred FFT Label'] == 'microphytoplancton').sum()
+    false_microphytos = np.logical_and(cl_count['Total FWS'] < FWS_micros_thr, cl_count['Pred FFT Label'] == 'microphytoplancton').sum()
+    false_noise = ((cl_count['Total FWS'] <= 100) & (cl_count['Total SWS'] >= SWS_noise_thr) & (cl_count['Pred FFT Label'] == 'inf1microm_unidentified_particle')).sum()
+    #
+    
+    cl_count = cl_count['Pred FFT Label'].value_counts()
+ 
+    cl_count = pd.DataFrame(cl_count).transpose()
+    flr_num = int(re.search(flr_regex, file).group(1))
+    
+    # Keep only "big" phyotplancton from FLR25 and "small" one from FLR6 
+    if flr_num == 25:
+        for clus_name in ['synechococcus', 'prochlorococcus']:
+            if clus_name in cl_count.columns:
+                cl_count[clus_name] = 0
+        
+        # Post processing rules
+        cl_count['cryptophyte'] = real_cryptos
+        cl_count['microphytoplancton'] = real_microphytos
+        
+        try:
+            cl_count['nanoeucaryote'] += false_microphytos
+        except KeyError:
+          cl_count['nanoeucaryote'] = false_microphytos
+
+      
+    elif flr_num == 6:
+        for clus_name in ['picoeucaryote', 'cryptophyte', 'nanoeucaryote', 'microphytoplancton']:
+            if clus_name in cl_count.columns:
+                cl_count[clus_name] = 0
+        
+        # Post processing rules
+        try:
+          cl_count['prochlorococcus'] += false_noise
+        except KeyError:
+          cl_count['prochlorococcus'] = false_noise
+
+    else:
+        raise RuntimeError('Unknown flr number', flr_num)
+
+
+    try:
+        cl_count['inf1microm_unidentified_particle'] -= false_noise
+    except KeyError:
+        cl_count['inf1microm_unidentified_particle'] = 0
+
+
+    # Extract the date
+    date = re.search(date_regex, file).group(1)
+
+    # Compute the volume
+    sep = '-' if flr_num == 6 else '_'
+    sum_file = 'SSLAMM' + sep + 'FLR' + str(flr_num) + ' ' + date + '_Info.txt'
+
+    try:
+      with open(sum_files_repo + '/' + sum_file) as f:
+        lines = f.readlines()
+
+        try:
+            vol = re.search('Volume .+: ([0-9]+,[0-9]+)', str(lines)).group(1)
+            vol = float(re.sub(',', '.', vol))
+        except AttributeError:
+            vol = np.nan
+            raise RuntimeError('Pas trouvé')
+    except FileNotFoundError:
+      print(file)
+      continue
+
+    cl_count = cl_count.div(int(vol))
+
+    # The timestamp is rounded to the closest 20 minutes    
+    date = pd.to_datetime(date, format='%Y-%m-%d %Hh%M', errors='ignore')
+    mins = date.minute
+    
+    
+
+    if (mins >= 00) & (mins <= 30): 
+        date = date.replace(minute=00)
+
+
+    elif (mins >= 31): # On arrondit à l'heure d'après
+        if date.hour != 23:
+            date = date.replace(hour= date.hour + 1, minute=00)
+        else:
+            try:
+                date = date.replace(day = date.day + 1, hour = 00, minute=00)
+            except:
+                date = date.replace(month = date.month + 1, day = 1, hour = 00, minute=00)
+    else:
+      raise RuntimeError(date,'non handled')
+           
+    cl_count['date'] = date 
+    cl_count['FLR'] = flr_num 
+
+    phyto_ts = phyto_ts.append(cl_count)
+    
+    
+idx_pbs = pd.DataFrame(phyto_ts.groupby(['date', 'FLR']).size()) # Make the same thing for phyto_ts_proba 
+idx_pbs = idx_pbs[idx_pbs[0] > 1].index
+idx_pbs = [id_[0] for id_ in  idx_pbs]
+
+phyto_ts_ok = phyto_ts[~phyto_ts['date'].isin(idx_pbs)]
+
+phyto_ts_resolved_pbs =  phyto_ts[phyto_ts['date'].isin(idx_pbs)].set_index(['date', 'FLR']).groupby(['date', 'FLR']).max().reset_index() # Take the more likely entry
+phyto_ts = phyto_ts_ok.reset_index(drop = True).append(phyto_ts_resolved_pbs)
+
+
+idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size()) # Make the same thing for phyto_ts_proba 
+idx_pbs = idx_pbs[idx_pbs[0] == 1].index
+
+
+phyto_rpz_ts = phyto_ts.groupby('date').sum()
+phyto_rpz_ts = phyto_rpz_ts.reset_index()
+
+# For those which have not both a FLR6 and a FLR25 file, replace the missing values by NaN
+for idx in idx_pbs:
+    phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
+    
+    
+phyto_rpz_ts['noise'] = phyto_rpz_ts['inf1microm_unidentified_particle'] + phyto_rpz_ts['sup1microm_unidentified_particle']
+del(phyto_rpz_ts['inf1microm_unidentified_particle'])
+del(phyto_rpz_ts['sup1microm_unidentified_particle'])
+#del(phyto_rpz_ts['FLR'])
+
+phyto_rpz_ts[(phyto_rpz_ts == 0)] = np.nan
+
+
+phyto_rpz_ts.to_csv(r'C:\Users\rfuchs\Documents\preds\pred4\P3\06_to_07_2020_concentration.csv', index = False)

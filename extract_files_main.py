@@ -51,6 +51,19 @@ flr_num = 25 # And 6
 
 extract_non_labeled_curves(data_source, data_destination, flr_num = flr_num)
 
+
+#====================
+# P3
+#====================
+
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3_L0'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3_L1'
+flr_num = 25 # And 6
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = flr_num)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
+
 ##################################################################################################
 # ENDOUME Labelled
 ##################################################################################################
