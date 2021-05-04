@@ -257,6 +257,9 @@ def pred_n_count(source_path, model, tn, thrs, exp_count = False):
 
     date = re.search(date_regex, source_path).group(1)
     date = pd.to_datetime(date, format='%Y-%m-%d %Hh%M', errors='ignore')
+    
+    date = date.round('1H')
+    '''
     mins = date.minute
                 
     if (mins >= 00) & (mins < 15): 
@@ -276,9 +279,73 @@ def pred_n_count(source_path, model, tn, thrs, exp_count = False):
                 date = date.replace(day = date.day + 1, hour = 00, minute=00)
             except:
                 date = date.replace(month = date.month + 1, day = 1, hour = 00, minute=00)
-                
+    '''
     cl_count['date'] = date 
     #cl_count_proba['date'] = date 
 
 
     return cl_count#, cl_count_proba
+
+
+def post_processing(df, flr_num):
+    ''' 
+        Reassign some of the particles classified by the CNN into the right classes
+        df (pandas DataFrame): The CNN predictions
+        flr_num (int): The FLR threshold of the predictions
+        ---------------------------------------------------------------
+        returns (pandas DataFrame): The corrected CNN predictions
+    '''
+    SWS_noise_thr = 70
+    FWS_crypto_thr = 1E4
+    FWS_micros_thr = 2 * 10 ** 5
+    
+    if flr_num == 25:
+        df.loc[np.logical_and(df['Total FWS'] <= FWS_crypto_thr, df['Pred FFT Label'] == 'cryptophyte'),\
+                      'Pred FFT Label'] = 'sup1microm_unidentified_particle'
+        df.loc[np.logical_and(df['Total FWS'] < FWS_micros_thr, df['Pred FFT Label'] == 'microphytoplancton'),\
+                      'Pred FFT Label'] = 'nanoeucaryote'
+    else:
+        df.loc[((df['Total FWS'] <= 100) & (df['Total SWS'] >= SWS_noise_thr) \
+               & (df['Pred FFT Label'] == 'inf1microm_unidentified_particle')),\
+               'Pred FFT Label'] = 'prochlorococcus'
+    return df
+
+
+def combine_files_into_acquisitions(df):
+    ''' Merge the predictions made for the FLR6 file and FLR25 for each 
+        acquisition and delete the "corrupted" files
+        df (pandas DataFrame): A dataFrame containing for each date (index) and 
+        pfg (columns), a quantity such as the biomass, the biovolume or the Total FLR 
+        ---------------------------------------------------------------
+        returns (pandas DataFrame): The predicted quantity by date for each pfg
+    '''
+    
+    #===========================================================================  
+    # Deal with acquisitions that have several FLR6 or FLR25 for the same date
+    #===========================================================================  
+
+    idx_pbs = pd.DataFrame(df.groupby(['date', 'FLR']).size()) 
+    idx_pbs = idx_pbs[idx_pbs[0] > 1].index
+    idx_pbs = [id_[0] for id_ in  idx_pbs]
+    
+    df_ok = df[~df['date'].isin(idx_pbs)]
+    df_resolved_pbs =  df[df['date'].isin(idx_pbs)].set_index(['date', 'FLR']).groupby(['date', 'FLR']).max().reset_index() # Take the more likely entry
+    df = df_ok.reset_index(drop = True).append(df_resolved_pbs)
+        
+    #===========================================================================  
+    # Deal with acquisitions which have a FLR6 but no FLR25 (or the reverse)
+    #===========================================================================  
+    
+    idx_pbs = pd.DataFrame(df.groupby('date').size())  
+    idx_pbs = idx_pbs[idx_pbs[0] == 1].index
+    
+    df_rpz_ts = df.set_index('date').astype(float).reset_index()
+    df_rpz_ts = df_rpz_ts.groupby('date').sum()
+    df_rpz_ts = df_rpz_ts.reset_index()
+    
+    # For those which have not both a FLR6 and a FLR25 file, replace the missing values by NaN
+    for idx in idx_pbs:
+        df_rpz_ts[df_rpz_ts['date'] == idx] = df_rpz_ts[df_rpz_ts['date'] == idx].replace(0, np.nan)
+        
+    del(df_rpz_ts['FLR'])
+    return df_rpz_ts

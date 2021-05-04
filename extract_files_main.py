@@ -77,8 +77,8 @@ extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
 # P5
 #====================
 
-data_source = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P5_L0'
-data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P5_L1'
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/P6/L1'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/P6/L1'
 
 extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
 extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
