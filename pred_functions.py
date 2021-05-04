@@ -157,8 +157,8 @@ def predict(source_path, dest_folder, model, tn, scale = False,\
         # Store the predictions on hard disk 
         date_regex = "(Pulse[0-9]{1,2}_20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:u|h)[0-9]{2})"
         file_name = re.search(date_regex, source_path).group(1)
-        #formatted_preds.to_csv(dest_folder + '/' + file_name + '.csv', index = False)
-        fp.write(dest_folder + '/' + file_name + '.parq', formatted_preds, compression='SNAPPY')
+        formatted_preds.to_csv(dest_folder + '/' + file_name + '.csv', index = False)
+        #fp.write(dest_folder + '/' + file_name + '.parq', formatted_preds, compression='SNAPPY')
         
     else:
         print('File was empty.')
