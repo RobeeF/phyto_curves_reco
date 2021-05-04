@@ -319,6 +319,8 @@ def homogeneous_cluster_names(array):
     noisesup_pat = '[_A-Za-z0-9?\-()]*noise[ _0-9]{0,1}sup[_A-Za-z()0-9?\-]*'
     nophyto_pat = '[_A-Za-z0-9?\-()]*nophyto[_A-Za-z()0-9?\-]*'
     unassigned_pat = '[_A-Za-z0-9?\-()]*[Uu]nassigned[ _A-Za-z()0-9?\-]*'
+    unidentified_pat = '^unidentified_particles*'
+
     # Add regex for undertermined
     # Add regex for unassigned
 
@@ -351,6 +353,7 @@ def homogeneous_cluster_names(array):
         array['cluster'] = array['cluster'].str.replace(micro_pat, 'microphytoplancton', regex = True, case = False)
         array['cluster'] = array['cluster'].str.replace(prochlo_pat, 'prochlorococcus', regex = True, case = False)
         array['cluster'] = array['cluster'].str.replace(synecho_pat, 'synechococcus', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace(unidentified_pat, 'noise', regex = True, case = False)
 
         array['cluster'] = array['cluster'].str.replace(noiseinf_pat,\
                         'inf1microm_unidentified_particle', regex = True, case = False)
@@ -366,7 +369,7 @@ def homogeneous_cluster_names(array):
 
         array['cluster'] = array['cluster'].str.replace(unassigned_pat,\
                                                     'noise', regex = True, case = False)
-
+            
         array['cluster'] = array.cluster.str.replace('C_noise1','inf1microm_unidentified_particle')
 
 
@@ -403,6 +406,7 @@ def homogeneous_cluster_names(array):
         array = [re.sub(micro_pat,'microphytoplancton', string) for string in array]
         array = [re.sub(prochlo_pat,'prochlorococcus', string) for string in array]
         array = [re.sub(synecho_pat,'synechococcus', string) for string in array]
+        array = [re.sub(unidentified_pat, 'noise', string) for string in array]
 
 
         array = [re.sub(noiseinf_pat,'inf1microm_unidentified_particle', string) for string in array]
@@ -424,85 +428,6 @@ def homogeneous_cluster_names(array):
 
     return array
 
-
-
-
-def homogeneous_cluster_names_(array):
-    ''' Legacy !!
-    Make homogeneous the names of the groups coming from the different Pulse files
-    array (list, numpy 1D array or dataframe): The container in which the names have to be changed
-    -----------------------------------------------------------------------------------------------
-    returns (array): The array with the name changed and the original shape
-    '''
-    if type(array) == pd.core.frame.DataFrame:
-        array['cluster'] = array.cluster.str.replace('airbubbles','airbubble')
-        array['cluster'] = array.cluster.str.replace('cryptophytes','cryptophyte')
-        array['cluster'] = array.cluster.str.replace('Cryptophyceae','cryptophyte')
-
-        array['cluster'] = array.cluster.str.replace('coccolithophorideae like','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('Nano1','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('Nano2','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('hsnano','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('HSNano','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('HSnano','nanoeucaryote')
-        array['cluster'] = array.cluster.str.replace('Nanoeukaryote','nanoeucaryote')
-
-        array['cluster'] = array.cluster.str.replace('picohighflr','picoeucaryote')
-        array['cluster'] = array.cluster.str.replace('picohighFLR','picoeucaryote')
-        array['cluster'] = array.cluster.str.replace('PicoHIGHFLR','picoeucaryote')
-        array['cluster'] = array.cluster.str.replace('PPE 1','picoeucaryote')
-        array['cluster'] = array.cluster.str.replace('PPE 2','picoeucaryote')
-
-        array['cluster'] = array.cluster.str.replace('unassigned_particle','noise')
-        array['cluster'] = array.cluster.str.replace('unassigned particles','noise')
-        array['cluster'] = array.cluster.str.replace('unassigned particle','noise')
-
-        array['cluster'] = array.cluster.str.replace('inf1um_unidentified_particle','inf1microm_unidentified_particle')
-        array['cluster'] = array.cluster.str.replace('sup1um_unidentified_particle','sup1microm_unidentified_particle')
-
-        array['cluster'] = array.cluster.str.replace('Microphytoplankton','microphytoplancton')
-
-        array['cluster'] = array.cluster.str.replace('µ','micro')
-        array['cluster'] = array.cluster.str.replace('es$','e') # Put in the names in singular form
-        array['cluster'] = array.cluster.str.replace(' ','') # Put in the names in singular form
-
-        array['cluster'] = array.cluster.str.lower()
-
-
-    else:
-
-        array = [re.sub('airbubbles','airbubble', string) for string in array]
-        array = [re.sub('cryptophytes','cryptophyte', string) for string in array]
-        array = [re.sub('Cryptophyceae','cryptophyte', string) for string in array]
-
-        array = [re.sub('coccolithophorideae like','nanoeucaryote', string) for string in array]
-        array = [re.sub('Nano1','nanoeucaryote', string) for string in array]
-        array = [re.sub('Nano2','nanoeucaryote', string) for string in array]
-        array = [re.sub('hsnano','nanoeucaryote', string) for string in array]
-        array = [re.sub('HSNano','nanoeucaryote', string) for string in array]
-        array = [re.sub('HSnano','nanoeucaryote', string) for string in array]
-        array = [re.sub('Nanoeukaryote','nanoeucaryote', string) for string in array]
-
-        array = [re.sub('picohighflr','picoeucaryotes', string) for string in array]
-        array = [re.sub('picohighFLR','picoeucaryote', string) for string in array]
-        array = [re.sub('PicoHIGHFLR','picoeucaryotes', string) for string in array]
-        array = [re.sub('PPE 1','picoeucaryotes', string) for string in array]
-        array = [re.sub('PPE 2','picoeucaryotes', string) for string in array]
-
-        array = [re.sub('unassigned_particle','noise', string) for string in array]
-        array = [re.sub('unassigned particles','noise', string) for string in array]
-        array = [re.sub('unassigned particle','noise', string) for string in array]
-
-        array = [re.sub('Microphytoplankton','microphytoplancton', string) for string in array]
-
-        array = [re.sub('µ','micro', string) for string in array]
-        array = [re.sub('es$','e', string) for string in array]
-        array = [re.sub(' ','', string) for string in array]
-
-        array = [string.lower() for string in array]
-        array = list(array)
-
-    return array
 
 def scaler(X):
     ''' Scale the data. For the moment only minmax scaling is implemented'''

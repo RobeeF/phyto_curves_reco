@@ -736,6 +736,7 @@ for idx, cluster_name in enumerate(interesting_classes):
 #================================================
 # Plot the hour histogram of spreads 
 #================================================
+
 for idx, cluster_name in enumerate(interesting_classes): 
     pred_ts_clus = pd.DataFrame(ts[cluster_name])
     pred_ts_clus.columns = ['pred_count']
@@ -842,86 +843,56 @@ plt.legend(['Manual Gating', 'Automatic Gating'])
 
 
 #=========================================================
-# Preds on P1
+# Preds on P1 to P5 concentration
 #=========================================================
-
 from copy import deepcopy
 
-interesting_classes = ['picoeucaryote', 'nanoeucaryote',
-        'cryptophyte', 'microphytoplancton',
-        'prochlorococcus', 'synechococcus']
-
-ts = pd.read_csv('pred4/P1/09_to_12_2019_nouvelle_moulinette_cryptos_phrochlo2.csv')
-ts = ts[['date'] + interesting_classes]
-
-
-
-
-
-
-#=========================================================
-# Preds on P2
-#=========================================================
-
-from copy import deepcopy
-
-interesting_classes = ['picoeucaryote', 'nanoeucaryote',
-        'cryptophyte', 'microphytoplancton',
-        'prochlorococcus', 'synechococcus']
-
-ts = pd.read_csv('pred4/P2/02_to_06_2020_concentration.csv')
-ts = ts[['date'] + interesting_classes]
-
-ts['date'] =  pd.to_datetime(ts['date'], format='%Y-%m-%d %H:%M:%S')
-ts = ts.set_index('date')
-
-
-for col in ts.columns:
-    ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 12)
-    plt.title(col, fontsize = 24)
-    plt.savefig('C:/Users/rfuchs/Desktop/preds_P2/' + col + '.png' )
-    plt.show()
-    
-
-ts_P2 = deepcopy(ts)
-
-
-#=========================================================
-# Preds on P3
-#=========================================================
-os.chdir('C:/Users/rfuchs/Documents/preds')
-
-interesting_classes = ['picoeucaryote', 'nanoeucaryote',
-        'cryptophyte', 'microphytoplancton',
-        'prochlorococcus', 'synechococcus']
-
-
-ts = pd.read_csv('pred4/P3/06_to_07_2020_concentration.csv')
-ts = ts[['date'] + interesting_classes]
+ts = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P1_P5_concentration.csv').iloc[:,1:]
+ts['date'] = pd.to_datetime(ts['date'])
 ts = ts.set_index('date')
 
 for col in ts.columns:
-    ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 12)
-    plt.title(col, fontsize = 24)
-    plt.savefig('C:/Users/rfuchs/Desktop/preds_P3/' + col + '.png' )
-    plt.show()
-
-
-
-#=========================================================
-# Preds on P2 et P3
-#=========================================================
-
-tot_ts = ts_P2.append(ts)
-
-for col in tot_ts.columns:
-    tot_ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10)
+    ts[col].plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 8)
     plt.title(col, fontsize = 24)
     plt.ylabel('Concentration (cells per $\mu{l}$)')
-    plt.savefig('C:/Users/rfuchs/Desktop/preds_P2_P3/' + col + '.png' )
+    #plt.savefig('C:/Users/rfuchs/Desktop/preds_P1_P5/' + col + '.png' )
     plt.show()
     
-tot_ts.to_csv('pred4/P2_P3_concentration.csv')
+
+pico_small = ts[(ts.index >= pd.to_datetime('2019-09-13')) & (ts.index <= pd.to_datetime('2019-09-24'))]['picoeucaryote']
+pico_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'picoeukaryotes')
+plt.ylabel('Abundance (particles/mL)')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/pico.png' )
+
+pico_small = ts[(ts.index >= pd.to_datetime('2019-09-15')) & (ts.index <= pd.to_datetime('2019-10-15'))]['picoeucaryote']
+pico_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'picoeukaryotes')
+plt.ylabel('Abundance (particles/mL)')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/pico_sept.png' )
+
+
+crypto_small = ts[(ts.index >= pd.to_datetime('2020-03-21 12:00')) & (ts.index <= pd.to_datetime('2020-03-26'))]['cryptophyte']
+crypto_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'cryptophytes')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/crypto.png' )
+
+crypto_small = ts[(ts.index >= pd.to_datetime('2020-03-01 12:00')) & (ts.index <= pd.to_datetime('2020-03-31'))]['cryptophyte']
+crypto_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'cryptophytes')
+plt.ylabel('Abundance (particles/mL)')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/crypto_march.png' )
+
+synecho_small = ts[(ts.index >= pd.to_datetime('2019-09-21 12:00')) & (ts.index <= pd.to_datetime('2019-10-07'))]['synechococcus']
+synecho_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'synechococcus')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/synecho.png' )
+
+
+synecho_small = ts[(ts.index >= pd.to_datetime('2019-09-15 12:00')) & (ts.index <= pd.to_datetime('2019-10-15'))]['synechococcus']
+synecho_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'synechococcus')
+plt.ylabel('Abundance (particles/mL)')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/synecho_sept.png' )
+
+
+nano_small = ts[(ts.index >= pd.to_datetime('2020-04-16')) & (ts.index <= pd.to_datetime('2020-04-30'))]['nanoeucaryote']
+nano_small.plot(alpha=0.5, figsize=(16, 10), marker='.', fontsize = 10, title = 'nanoeukaryotes')
+plt.savefig('C:/Users/rfuchs/Desktop/peaks/nano.png' )
 
 ###################################################################################################################
 # Visualize the predictions made on SSLAMM (trained with SSLAMM data)
@@ -994,6 +965,8 @@ plot_2D(preds, tn, 'Total SWS', 'Total FWS', loc = 'upper left')
 # Decision boundaries plot
 plot_decision_boundaries2(preds, tn, 'Total FWS', 'Total FLR', \
                           loc = 'upper left', title = None, colors = None)
+
+    
 
 #===========================================
 # Viz one of the SSLAMM files

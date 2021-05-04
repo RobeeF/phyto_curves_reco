@@ -39,14 +39,15 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     # Defining the regex
     #date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
 
-    date_regex = "FLR" + str(flr_num) + "(?:IIF)+ (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_[A-Za-z ()]+"
-    pulse_regex = "_([a-zA-Z0-9µ ()_]+)_Pulses.csv"  
+    info_regex = "FLR" + str(flr_num) + "(?:IIF)*\s*(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_([a-zA-Z0-9µ ()_-]+)_[Pp]ulses.csv"
+    #date_regex = "FLR" + str(flr_num) + "(?:IIF)*\s*(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_[A-Za-z ()]+"
+    #pulse_regex = "_([a-zA-Z0-9µ ()_-]+)_Pulses.csv"  
 
-    dates = set([re.search(date_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
+    dates = set([re.search(info_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
     
-    cluster_classes = list(set([re.search(pulse_regex, cc).group(1) for cc in pulse_titles_clus]))
+    cluster_classes = list(set([re.search(info_regex, cc).group(2) for cc in pulse_titles_clus]))
 
-    
+
     if len(pulse_titles_default) != 0:
         cluster_classes += ['noise']
      
@@ -57,7 +58,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     
     #date = list(dates)[0]
     for date in dates: # For each acquisition
-        print(nb_files_already_processed, '/', nb_acquisitions, "files have already been processed")
+        print(nb_files_already_processed + 1, '/', nb_acquisitions, "files have already been processed")
         print("Processing:", date)
 
         ### Check if the acquisition has already been formatted
@@ -73,7 +74,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
         #title= date_datasets_titles[0]
         # For each file, i.e. for each functional group
         for title in date_datasets_titles:
-            clus_name = re.search(pulse_regex, title).group(1) 
+            clus_name = re.search(info_regex, title).group(2) 
             print(clus_name)
             
             try:
@@ -81,6 +82,8 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
                 try:
                     df = pd.read_csv(data_source + '/' + title, sep = ';', dtype = np.float64, thousands='.', decimal=',')
+                except ValueError:
+                    df = pd.read_csv(data_source + '/' + title, sep = ',', dtype = np.float64)
                 except pd.errors.EmptyDataError:
                     print('Empty dataset')
                     continue
@@ -93,6 +96,9 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             # Add the cluster name 
             df["cluster"] = clus_name
             
+            if 'ID' in df.columns:# Handle cytoclus3 formatting
+                df = df.rename(columns={'ID': 'Particle ID'})
+                
             df.set_index("Particle ID", inplace = True)
 
             pulse_data = pulse_data.append(df)
@@ -110,6 +116,8 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             except ValueError: # If the data are in European format ("," stands for decimals and not thousands)
                 try:
                     df = pd.read_csv(data_source + '/' + title, sep = ';', dtype = np.float64, thousands='.', decimal=',')
+                except ValueError:
+                    df = pd.read_csv(data_source + '/' + title, sep = ',', dtype = np.float64)
                 except pd.errors.EmptyDataError:
                     print('Empty dataset')
                     continue
@@ -119,6 +127,9 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             
             existing_indices = pulse_data[pulse_data['date']==date].index
     
+            if 'ID' in df.columns: # Handle cytoclus3 formatting
+                df = df.rename(columns={'ID': 'Particle ID'})
+                
             df.set_index("Particle ID", inplace = True)
             noise_indices = list(set(df.index) - set(existing_indices)) # Determining the noise particles indices
             df = df.loc[noise_indices] # Keep only the noise particles 
@@ -127,6 +138,8 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             df["cluster"] = clus_name
         
             pulse_data = pulse_data.append(df)
+        else:
+            raise RuntimeError('No Default file to deduce the noise particles from')
 
         if spe_extract_FLR & (flr_num == 25): 
             prev_len = len(pulse_data)

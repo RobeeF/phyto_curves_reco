@@ -4,6 +4,7 @@ Created on Sun Dec 15 17:27:32 2019
 
 @author: Utilisateur
 """
+
 import os
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
 from from_cytoclus_to_curves_values import extract_labeled_curves, extract_non_labeled_curves
@@ -58,10 +59,30 @@ extract_non_labeled_curves(data_source, data_destination, flr_num = flr_num)
 
 data_source = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3_L0'
 data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3_L1'
-flr_num = 25 # And 6
 
-extract_non_labeled_curves(data_source, data_destination, flr_num = flr_num)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
 extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
+#====================
+# P4
+#====================
+
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM-P4_L1'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM-P4_L2-6'
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
+#====================
+# P5
+#====================
+
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P5_L0'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P5_L1'
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
 
 
 ##################################################################################################
@@ -112,3 +133,35 @@ pd.isnull(df).any().nonzero()[0]
 idx = np.isnan(df.values).any(axis=(1,2))
 
 X_train = X_train[~idx]
+
+##################################################################################################
+# XP biais labelled
+##################################################################################################
+parent_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/Pulse_shapes/'
+expert_repos = os.listdir(parent_repo)
+flr_num = 25
+
+for repo_name in expert_repos:
+    data_source = parent_repo + repo_name
+    print(repo_name)
+    data_destination = 'C:/Users/rfuchs/Desktop/formatted_XP/' + repo_name
+    
+    extract_labeled_curves(data_source, data_destination, flr_num = flr_num)
+    
+##################################################################################################
+# Chloé labelled files
+##################################################################################################
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/ChloeCaille_SSLAMMdata/'
+expert_repos = os.listdir(parent_repo)
+data_destination = parent_repo
+flr_num = 25
+    
+extract_labeled_curves(data_source, data_destination, flr_num = flr_num)
+ 
+import fastparquet as fp   
+pfile = fp.ParquetFile(data_destination + '/' + 'Labelled_Pulse25_2020-10-18 06h06.parq')
+total_df = pfile.to_pandas()
+set(total_df.cluster)
+
+a = homogeneous_cluster_names(total_df)
+set(a.cluster)

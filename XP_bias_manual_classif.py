@@ -65,11 +65,12 @@ cluster_classes = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
 
 classes_of_interest = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                 'microphytoplancton', 'picoeucaryote', 'prochlorococcus', \
-                'synechococcus', 'noise']
+                'synechococcus']
 
 # Noise is useless and would have to account for unmarked particles
-small_cells = ['synechococcus', 'prochlorococcus', 'airbubble']
-large_cells = ['picoeucaryote', 'cryptophyte', 'nanoeucaryote', 'microphytoplancton', 'airbubble']
+small_cells = ['synechococcus', 'prochlorococcus']
+large_cells = ['picoeucaryote', 'cryptophyte', 'nanoeucaryote',\
+               'microphytoplancton', 'airbubble', 'Noise']
 
 def creach_post_processing(acq, data):
     ''' For some of Creach 's acquisitions low_fluo correspond to < 1 micrometre
@@ -167,9 +168,9 @@ for expert in expert_names_list:
                                        ignore_index=True)
                     
         # Group all the noise into one class
-        counts['cluster'] = counts.cluster.str.replace('sup1microm_unidentified_particle','noise')
-        counts['cluster'] = counts.cluster.str.replace('inf1microm_unidentified_particle','noise')
-        counts['cluster'] = counts.cluster.str.replace('unidentified_particle','noise')
+        #counts['cluster'] = counts.cluster.str.replace('sup1microm_unidentified_particle','noise')
+        #counts['cluster'] = counts.cluster.str.replace('inf1microm_unidentified_particle','noise')
+        #counts['cluster'] = counts.cluster.str.replace('unidentified_particle','noise')
 
         # Report expert and acquisition names
         counts['expert'] = expert
@@ -179,6 +180,34 @@ for expert in expert_names_list:
 
 print(np.unique(count_df["cluster"]))
 count_df['Count'] = count_df['Count'].astype(int)  
+
+# Compute the total phyto particles identified 
+                 
+tot_phyto = count_df[count_df['cluster'].isin(classes_of_interest)][['acq', 'Count',\
+                    "expert"]].groupby(['acq', "expert"]).sum()
+                 
+# Compute the total noise particles identified                                          
+tot_part = count_df[count_df['cluster'] == 'default(all)'][['acq', 'Count',  "expert"]].groupby(['acq', "expert"]).sum()
+
+# Add Latimier for Default count (she has send the Pulse shapes not the selections sets)
+latimier_tot = tot_part.reset_index()[['acq', 'Count']].drop_duplicates()
+latimier_tot['expert'] = 'Latimier'
+latimier_tot = latimier_tot.set_index(['acq', "expert"])
+tot_part = tot_part.append(latimier_tot).sort_index()
+
+
+# Add the noise counts per experts
+noise_count = (tot_part - tot_phyto).reset_index()
+noise_count['cluster'] = 'Noise'
+noise_count['Concentration'] = np.nan
+noise_count = noise_count[count_df.columns]
+
+# Delete detailed noise particles from the count
+count_df = count_df[count_df['cluster'].isin(classes_of_interest)]
+count_df = count_df.append(noise_count)
+
+
+count_df.groupby(['acq', 'expert']).sum()['Count'].groupby('acq').std()
 
 # Keep only the sets belonging to the interesting classes
 #count_df = count_df[count_df['cluster'].isin(classes_of_interest)] 
@@ -196,7 +225,13 @@ spe_extract_25 = (count_df['flr'] == 25) & (count_df['cluster'].isin(large_cells
 
 count_df = count_df[spe_extract_6 | spe_extract_25]
 
+c = count_df.set_index(['acq', 'expert']).sort_index().reset_index()
+
+c.groupby(['date', 'expert']).sum()
+
 # Export the counts per date per expert
+# The noise is here aggregated (inf + sup 1 microm) but a detail can be obtained by running the
+# code starting on line 857 
 mean_std = pd.DataFrame()
 for d, group in count_df.groupby(['date']):
     name = list(group['date'])[0]
@@ -206,6 +241,7 @@ for d, group in count_df.groupby(['date']):
     data = data.astype(int)
     data.to_csv(temp_dir + 'SSLAMM_' + name + '.csv') 
 
+    print(data.std(1) / data.mean(1))
     mean_std_acq = pd.concat([data.mean(1), data.std(1)], axis = 1)
     mean_std_acq.columns = ['mean', 'std']
     mean_std_acq = mean_std_acq['mean'].round(2).astype(str) + \
@@ -215,8 +251,38 @@ for d, group in count_df.groupby(['date']):
     mean_std = pd.concat([mean_std, mean_std_acq], axis = 1)
     
     
-mean_std.to_csv(temp_dir + 'SSLAMM_meanstd' + '.csv') 
-mean_std.to_latex(temp_dir + 'SSLAMM_meanstd' + '.tex')
+mean_std.to_csv(temp_dir + 'SSLAMM_meanstd_noise' + '.csv') 
+mean_std.to_latex(temp_dir + 'SSLAMM_meanstd_noise' + '.tex')
+
+import seaborn as sns
+
+# Graphes pour Creach
+for date_idx, date_data in count_df.groupby('date'):
+    sns.boxplot(y='Count', x='cluster', 
+                 data=date_data, 
+                 palette="colorblind",
+                 order =['airbubble', 'cryptophyte', 'nanoeucaryote',\
+                'microphytoplancton',\
+                'picoeucaryote', 'prochlorococcus', \
+                'synechococcus'],
+                 #hue='Gating type', 
+                 showfliers = False
+                 )
+    
+    plt.title('Acquisition date: ' + date_idx)
+    locs, labels=plt.xticks()
+    plt.xticks(locs, ['airbubbles', 'cryptophytes', 'nanoeukaryotes',\
+                'microphytoplankton', 'picoeukaryotes', 'Prochlorococcus', \
+                'Synechococcus'], fontsize = 10, rotation=20)
+        
+    plt.xlabel(xlabel = 'Phytoplankton Functional Groups', fontsize = 10)
+    plt.ylabel(ylabel = 'Counts (number of particles)', fontsize = 10)
+
+    plt.savefig('C:/Users/rfuchs/Desktop/manual_gating_diversity/' + date_idx + '.png',\
+                bbox_inches='tight')   
+    plt.show()
+
+
 
 #======================================================================
 # Check counts computed by Cytoclus == counts from Pulse shapes
@@ -656,16 +722,15 @@ acq_part[acq_part['Particle ID'] == 4643]['cluster']
 #======================================================================
 # Plot uncertainty maps  
 #====================================================================== 
-# Pb to tackle before: !!! 
-# Duplicated indices for selected file
 
 unbias_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/unbiased'
 nomenclature_path = 'C:/Users/rfuchs/Documents/cyto_classif/XP_Pulses_L2/train_test_nomenclature.csv'
-fig_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/uncertainty_maps_unanimity/'
+fig_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/uncertainty_maps_twothird/'
 
 tn = pd.read_csv(nomenclature_path)
 tn.columns = ['label', 'Particle_class']
-tn = tn.append({'Particle_class': 9, 'label': 'unknown'}, ignore_index = True)
+tn = tn.append({'Particle_class': 9, 'label': 'non-consensual particles'}, ignore_index = True)
+
 
 # Take the Default by Lotty (same for all expert)
 default_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/Listmodes/' 
@@ -684,7 +749,7 @@ for acq in acquistion_names_lists:
     # Set class to unknown when particles are not selected
     selected_file.iloc[:,1] = np.where(selected_file['know_cclass'], \
                                            selected_file['pred_class'],\
-                                               'unknown')
+                                               'non-consensual particles')
         
     del(selected_file['know_cclass'])
     
@@ -693,15 +758,16 @@ for acq in acquistion_names_lists:
     default_acq = pd.read_csv(default_repo + default_name, sep = ';', decimal = ',') 
     
     full_file = default_acq.merge(selected_file, on = 'Particle ID', how = 'left')
-    full_file['pred_class'] = full_file['pred_class'].fillna('unknown')
+    full_file['pred_class'] = full_file['pred_class'].fillna('non-consensual particles')
     
     full_file.set_index('Particle ID', inplace = True)
-    q1 = 'FWS Total'
     q2 = 'FL Red Total'
+    q1 = 'SWS Total'
 
     # Original function
     plot_2Dcyto(full_file, full_file['pred_class'], tn, q1, q2, str_labels = True,\
-                title = fig_repo + acq)
+                title = fig_repo + acq + '_' + q1 + '_' + q2)
+    #plot_2Dcyto(full_file, full_file['pred_class'], tn, q1, q2, str_labels = True)
 
 
 
@@ -780,5 +846,141 @@ for acq in acquistion_names_lists:
 path = r'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/Pulse_shapes/Creach'
 files_to_rename = os.listdir(path)
 
-for file in files_to_rename[1:]:
-    os.rename(path + '/' + file, path + '/' + file[9:-4] + '_Pulses.csv')
+for file in files_to_rename:
+    new_file_name = re.sub('_Pulses_Pulses.csv_Pulses.csv', '_Pulses.csv', file)
+
+    os.rename(path + '/' + file, path + '/' + new_file_name)
+    
+
+##############################################################################################
+###########  Compute actual noise heterogenity computation) ############################
+##############################################################################################
+
+import re
+os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
+from dataset_preprocessing import homogeneous_cluster_names
+import scipy.integrate as it
+
+parent_repo = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/Pulse_shapes/'
+expert_repos = os.listdir(parent_repo)
+flr_num = 6
+
+is_ground_truth = True
+source = 'C:/Users/rfuchs/Desktop/formatted_XP/'
+dest_folder = 'C:/Users/rfuchs/Desktop/noise_estimate/' 
+
+
+date_regex = "(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})"
+flr_regex = 'Pulse([0-9]{1,2})'
+
+inf_noise_count_df = pd.DataFrame(index = acquistion_names_lists, columns = expert_names_list)
+sup_noise_count_df = pd.DataFrame(index = acquistion_names_lists, columns = expert_names_list)
+
+for expert in expert_repos:
+    print(expert)
+    
+    files = os.listdir(source + expert)
+    files = [f for f in files if re.search('.parq', f)]
+    
+    for file in files: 
+        print(file)
+        source_path = source + expert + '/' + file
+        
+        pfile = fp.ParquetFile(source_path)
+        df = pfile.to_pandas()
+        
+        try:
+            df = df.set_index('Particle ID')
+        except:
+            if 'ID' in df.columns: # Handle cytoclus3 formatting
+                df = df.rename(columns={'ID': 'Particle ID'})
+            else:
+                print('Particle ID was not found in column names')
+   
+        grouped_df = df[['SWS', 'FWS', 'cluster']].reset_index().groupby(['Particle ID', 'cluster'])
+    
+        df = grouped_df.agg(
+        {
+             'FWS':it.trapz,    # Sum duration per group
+        })
+        df.reset_index(inplace = True)
+            
+        # Need small post-processing for Creach's name
+        if expert == 'Creach':
+            df = creach_post_processing(acq, df)
+
+        df = homogeneous_cluster_names(df)
+        true_labels = df.groupby('Particle ID')['cluster'].apply(np.unique)
+        df = df.set_index('Particle ID')
+   
+        # Delete particles affiliated to 2 different groups
+        if len(true_labels) != len(df):
+
+            not_corrupted_idx = true_labels.loc[true_labels.apply(len) == 1].index
+            #df.reindex(index = not_corrupted_idx)
+            df = df.loc[not_corrupted_idx]
+            pid_list = list(not_corrupted_idx)
+            
+            true_labels = true_labels.loc[not_corrupted_idx]
+            
+        true_labels = np.stack(true_labels)[:,0]
+        print(set(true_labels))
+        
+        true_labels = np.where((true_labels == 'noise') & (df['FWS'] >= 100), 'sup1microm_unidentified_particle', true_labels)
+        true_labels = np.where((true_labels == 'noise') & (df['FWS'] < 100), 'inf1microm_unidentified_particle', true_labels)
+        
+        cnames, ccounts = np.unique(true_labels, return_counts = True)
+        inf_noise = ccounts[cnames == 'inf1microm_unidentified_particle'][0]
+        sup_noise = ccounts[cnames == 'sup1microm_unidentified_particle'][0]
+        
+        # Need to extract the date before
+        date = re.search(date_regex, file).group(1)
+        flr_num = re.search(flr_regex, file).group(1)
+        if flr_num == '25':
+            formatted_name = 'SSLAMM_FLR' + flr_num + ' ' + date
+        else:
+            formatted_name = 'SSLAMM-FLR' + flr_num + ' ' + date
+
+        inf_noise_count_df.loc[formatted_name, expert] = inf_noise
+        sup_noise_count_df.loc[formatted_name, expert] = sup_noise
+   
+        
+#np.unique(true_labels, return_counts = True)
+
+temp_dir = 'C:/Users/rfuchs/Documents/These/Oceano/XP_biais/temp_count3/'
+
+inf_noise_count_df.to_csv(temp_dir + 'inf1microm_noise.csv')  
+sup_noise_count_df.to_csv(temp_dir + 'sup1microm_noise.csv')  
+
+
+# Extract the mean and noise information
+mean_std_acq = pd.concat([inf_noise_count_df.mean(axis = 1), inf_noise_count_df.std(axis = 1) ], axis = 1)
+mean_std_acq.columns = ['mean', 'std']
+print(mean_std_acq['std'] / mean_std_acq['mean'])
+
+mean_std_acq = mean_std_acq['mean'].round(2).astype(str) + \
+    ' (' + mean_std_acq['std'].round(2).astype(str) + ')'
+mean_std_acq.index.name = 'date'
+mean_std_acq.name = 'mean_std'
+mean_std_acq = mean_std_acq.reset_index().T
+
+mean_std_acq.columns = mean_std_acq.iloc[0]
+mean_std_acq = mean_std_acq[1:]
+mean_std_acq.to_csv(temp_dir + 'inf1microm_noise_agg.csv')  
+
+
+# Same with sup1 microm noise
+mean_std_acq = pd.concat([sup_noise_count_df.mean(axis = 1), sup_noise_count_df.std(axis = 1) ], axis = 1)
+mean_std_acq.columns = ['mean', 'std']
+print(mean_std_acq['std'] / mean_std_acq['mean'])
+
+mean_std_acq = mean_std_acq['mean'].round(2).astype(str) + \
+    ' (' + mean_std_acq['std'].round(2).astype(str) + ')'
+mean_std_acq.index.name = 'date'
+mean_std_acq.name = 'mean_std'
+mean_std_acq = mean_std_acq.reset_index().T
+
+mean_std_acq.columns = mean_std_acq.iloc[0]
+mean_std_acq = mean_std_acq[1:]
+mean_std_acq.to_csv(temp_dir + 'sup1microm_noise_agg.csv')  
+

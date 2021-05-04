@@ -202,7 +202,7 @@ phyto_rpz_ts.to_csv('C:/Users/rfuchs/Documents/02_to_03_2020.csv', index = False
 
 
 
-
+# New version: 
 
 
 
@@ -216,7 +216,7 @@ import pandas as pd
 import numpy as np
 
 # Fetch the files 
-pred_folder =  r"C:\Users\rfuchs\Documents\cyto_classif\SSLAMM_P3\Preds"
+pred_folder =  r"C:\Users\rfuchs\Documents\cyto_classif\SSLAMM_P1\Preds_P1"
 pred_files = os.listdir(pred_folder)
 
 pulse_regex = "Pulse" 
@@ -229,7 +229,7 @@ files = [file for file in pred_files if re.search(pulse_regex, file)] # The file
 
 
 
-sum_files_repo = "C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P3/summary"
+sum_files_repo = "C:/Users/rfuchs/Documents/cyto_classif/SSLAMM_P1/summary"
 
 phyto_ts = pd.DataFrame(columns = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
                    'inf1microm_unidentified_particle', 'microphytoplancton',\
@@ -285,6 +285,11 @@ for file in files:
             if clus_name in cl_count.columns:
                 cl_count[clus_name] = 0
         
+        
+        if file == 'Pulse6_2019-11-08 09h58.csv':
+            print('Before postprocessing:')
+            print(cl_count['prochlorococcus'])
+        
         # Post processing rules
         try:
           cl_count['prochlorococcus'] += false_noise
@@ -294,6 +299,10 @@ for file in files:
     else:
         raise RuntimeError('Unknown flr number', flr_num)
 
+    if file == 'Pulse6_2019-11-08 09h58.csv':
+        print('----------------')
+        print('After postprocessing')
+        print(cl_count['prochlorococcus'])
 
     try:
         cl_count['inf1microm_unidentified_particle'] -= false_noise
@@ -327,11 +336,11 @@ for file in files:
     # The timestamp is rounded to the closest 20 minutes    
     date = pd.to_datetime(date, format='%Y-%m-%d %Hh%M', errors='ignore')
     mins = date.minute
-    
-    
+        
 
     if (mins >= 00) & (mins <= 30): 
         date = date.replace(minute=00)
+
 
 
     elif (mins >= 31): # On arrondit à l'heure d'après
@@ -380,5 +389,29 @@ del(phyto_rpz_ts['sup1microm_unidentified_particle'])
 
 phyto_rpz_ts[(phyto_rpz_ts == 0)] = np.nan
 
+# Delete an outlier
+phyto_rpz_ts['prochlorococcus'] = np.where(phyto_rpz_ts['prochlorococcus'] <= 60, phyto_rpz_ts['prochlorococcus'], np.nan)
 
-phyto_rpz_ts.to_csv(r'C:\Users\rfuchs\Documents\preds\pred4\P3\06_to_07_2020_concentration.csv', index = False)
+
+phyto_rpz_ts.to_csv(r'C:\Users\rfuchs\Documents\preds\pred4\P1\09_to_12_2019_concentration.csv', index = False)
+
+#==================================================================
+# Create ts from P1 to P5
+#==================================================================
+
+from copy import deepcopy
+
+ts_P1 = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P1/09_to_12_2019_concentration.csv')
+ts_P2 = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P2/02_to_06_2020_concentration.csv')
+ts_P3 = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P3/06_to_07_2020_concentration.csv')
+ts_P4 = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P4/07_to_10_2020_concentration.csv')
+ts_P5 = pd.read_csv('C:/Users/rfuchs/Documents/preds/pred4/P5/10_to_12_2020_concentration.csv')
+
+ts = ts_P1.append(ts_P2).append(ts_P3).append(ts_P4).append(ts_P5)
+#ts = ts[['date'] + interesting_classes]
+
+# Delete the most obvious outliers
+#max_proch  = ts.prochlorococcus.max()
+#ts['prochlorococcus'] = ts.prochlorococcus.replace({max_proch: np.nan})
+
+ts.to_csv('C:/Users/rfuchs/Documents/preds/pred4/P1_P5_concentration.csv', index = True)

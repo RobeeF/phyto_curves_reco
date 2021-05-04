@@ -5,6 +5,7 @@ Created on Wed Apr  8 16:17:23 2020
 @author: rfuchs
 """
 
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import ConvexHull
@@ -20,7 +21,7 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = Non
         colors = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red',\
                   'purple', 'blue', 'brown', 'grey']
 
-    fig, ax1 = plt.subplots(1,1, figsize=(12,6))
+    fig, ax1 = plt.subplots(1,1, figsize=(11, 11))
     for id_, label in enumerate(list(tn['label'])):
         
         if str_labels:
@@ -29,28 +30,39 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = Non
             obs = X[y == id_]
         
         # Format the label of noise particles
-        if label == 'sup1microm_unidentified_particle':
-            formatted_label = '$noise \geq 1\mu{m}$' 
+        if re.search('sup1microm', label):
+            formatted_label = '$Noise \geq 1\mu{m}$'
         elif label == 'inf1microm_unidentified_particle':
-            formatted_label = '$noise \leq 1\mu{m}$' 
+            formatted_label = '$Noise < 1\mu{m}$'
+        elif label == 'airbubble':
+            formatted_label = 'air bubbles'
+            formatted_label = formatted_label.capitalize()
+        elif label in(['synechococcus', 'prochlorococcus']):
+            formatted_label = '$\it{' + label.capitalize() + '}$'
         else:
-            formatted_label = label
-            
-        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= formatted_label, s = 1)
+            formatted_label = re.sub('e$', 'es', label)
+            formatted_label = formatted_label.capitalize()
+
+        formatted_label = re.sub('caryote', 'karyote', formatted_label)
+        formatted_label = re.sub('plancton', 'plankton', formatted_label)
+        
+        #print(formatted_label)
+        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= formatted_label, s = 1.5)
         ax1.legend(loc= 'upper left', shadow=True, fancybox=True,\
                    prop={'size': 14}, ncol=2, markerscale = 4.0)
 
-    axes_labels = ['$10^0$', '$10^1$', '$10^2$', '$10^3$', '$10^4$', '$10^5$', '$10^6$']
+    axes_labels = ['$10^0$', '$10^1$', '$10^2$', '$10^3$', '$10^4$', '$10^5$',\
+                   '$10^6$']
     ax1.set_xticklabels(axes_labels, fontsize = 'xx-large')
     ax1.set_yticklabels(axes_labels, fontsize = 'xx-large')
 
-    ax1.set_title('True :' +  q1 + ' vs ' + q2, fontsize = 'xx-large')
+    #ax1.set_title('True: ' +  q1 + ' vs ' + q2, fontsize = 'xx-large')
     ax1.set_xscale('log')
     ax1.set_yscale('log')
     ax1.set_xlabel(q1, fontsize = 'xx-large')
     ax1.set_ylabel(q2, fontsize = 'xx-large')
-    ax1.set_xlim(1, 5*10**6)
-    ax1.set_ylim(1, 10**7)
+    ax1.set_xlim(1, 1*10**6)
+    ax1.set_ylim(1, 10**6)
     
     if title != None:
         plt.savefig(title)

@@ -26,9 +26,12 @@ def format_data(source_path, dest_folder, scale = False, \
     try:
         df = df.set_index('Particle ID')
     except:
-        print('Particle ID was not found in column names')
+        if 'ID' in df.columns: # Handle cytoclus3 formatting
+            df = df.rename(columns={'ID': 'Particle ID'})
+        else:
+            print('Particle ID was not found in column names')
    
-    
+
     if len(df) > 0: # Delete empty dataframes       
         if is_ground_truth:
             df = homogeneous_cluster_names(df)
