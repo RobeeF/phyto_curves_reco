@@ -61,8 +61,8 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
         for vfile in valid_files:
             pfile = fp.ParquetFile(source + '/' + vfile)
             vc = np.unique(pfile.to_pandas(columns=['cluster'])['cluster'])
-            #vc = homogeneous_cluster_names(vc) # To decomment for SSLAMM
-            valid_classes = valid_classes + vc
+            vc = homogeneous_cluster_names_swings(vc) # To decomment for SSLAMM
+            valid_classes = valid_classes + vc # unlist vs if  homogeneous_cluster_names is uncommented
 
         valid_classes = np.unique(valid_classes)
 
@@ -248,7 +248,7 @@ def data_preprocessing(df, balancing_dict = None, max_len = None,  \
     DEFAULT_UDS_SIZE = 6000 # If decide to undersample, how many observations to keep in the end
 
     # Make the cluster names homogeneous and get the group of each particule
-    df = homogeneous_cluster_names(df)
+    df = homogeneous_cluster_names_swings(df) # To uncomment for SSLAMM
     pid_cluster = df[['Particle ID', 'cluster']].drop_duplicates()
     clus_value_count = pid_cluster.cluster.value_counts().to_dict()
 
@@ -433,6 +433,24 @@ def homogeneous_cluster_names(array):
 
     return array
 
+
+def homogeneous_cluster_names_swings(array):
+    ''' Make homogeneous the names of the groups coming from the different Pulse files of the Swings campaign
+    array (list, numpy 1D array or dataframe): The container in which the names have to be changed
+    -----------------------------------------------------------------------------------------------
+    returns (array): The array with the name changed and the original shape
+    '''
+    if type(array) == pd.core.frame.DataFrame:
+
+        prefix_regex = '([A-Za-z]+)_'
+        array['cluster'] = array['cluster'].str.replace('bruitdefond', 'Unassigned Particles')
+        array['cluster'] = array['cluster'].str.replace('r([A-Za-z]+)_[A-Za-z]+', r'\1', regex = True, case = False)
+        
+    else:
+        array = [re.sub('bruitdefond', 'Unassigned Particles', string) for string in array]
+        array = [re.sub(r'([A-Za-z]+)_[A-Za-z]+', r'\1', string) for string in array]
+        
+    return array    
 
 def scaler(X):
     ''' Scale the data. For the moment only minmax scaling is implemented'''
