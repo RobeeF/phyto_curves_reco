@@ -61,7 +61,7 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
         for vfile in valid_files:
             pfile = fp.ParquetFile(source + '/' + vfile)
             vc = np.unique(pfile.to_pandas(columns=['cluster'])['cluster'])
-            vc = homogeneous_cluster_names(vc)
+            #vc = homogeneous_cluster_names(vc) # To decomment for SSLAMM
             valid_classes = valid_classes + vc
 
         valid_classes = np.unique(valid_classes)

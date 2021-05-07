@@ -49,7 +49,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
 
 
     if len(pulse_titles_default) != 0:
-        cluster_classes += ['noise']
+        cluster_classes += ['Unassigned Particles']
      
     nb_acquisitions = len(dates)
     
@@ -134,7 +134,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             noise_indices = list(set(df.index) - set(existing_indices)) # Determining the noise particles indices
             df = df.loc[noise_indices] # Keep only the noise particles 
         
-            clus_name = "noise"
+            clus_name = 'Unassigned Particles'
             df["cluster"] = clus_name
         
             pulse_data = pulse_data.append(df)
