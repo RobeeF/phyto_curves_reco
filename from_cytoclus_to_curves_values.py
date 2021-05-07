@@ -17,7 +17,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     returns (None): Write the labelled Pulse shapes on hard disk
     '''
     # Dirty assertion
-    assert (flr_num == 6) or (flr_num == 7) or (flr_num == 11) or (flr_num == 25) 
+    #assert (flr_num == 6) or (flr_num == 7) or (flr_num == 11) or (flr_num == 25) 
     
     nb_files_already_processed = 0
     log_file = data_destination + "/pred_logs.txt" # Register where write the already predicted files

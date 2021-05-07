@@ -102,7 +102,9 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
 
 
     # Write the nomenclature (Ex: Synnechochocus = 0, Prochlorrococus = 1 ...) used to generate the dataset
-    pd.DataFrame(zip(le.classes_,le.transform(le.classes_)), columns = ['cluster', 'labels']).to_csv(source + '/train_test_nomenclature.csv', index = False)
+    pd.DataFrame(zip(le.classes_,le.transform(le.classes_)),\
+                 columns = ['cluster', 'labels']).to_csv(source + '/train_test_nomenclature.csv',\
+                 index = False)
 
     # Write the names of the test_files for latter vizualisation
     log_file = source + "/test_files_name.txt" # Create the file if it does not exist
