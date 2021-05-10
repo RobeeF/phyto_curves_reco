@@ -441,10 +441,8 @@ def homogeneous_cluster_names_swings(array):
     returns (array): The array with the name changed and the original shape
     '''
     if type(array) == pd.core.frame.DataFrame:
-
-        prefix_regex = '([A-Za-z]+)_'
         array['cluster'] = array['cluster'].str.replace('bruitdefond', 'Unassigned Particles')
-        array['cluster'] = array['cluster'].str.replace('r([A-Za-z]+)_[A-Za-z]+', r'\1', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace('([A-Za-z]+)_[A-Za-z]+', r'\1', regex = True, case = False)
         
     else:
         array = [re.sub('bruitdefond', 'Unassigned Particles', string) for string in array]
