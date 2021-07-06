@@ -167,12 +167,16 @@ def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extrac
 
         if not('Particle ID' in df.columns):
             df = df.reset_index()
+        if len(df) == 0:
+          continue
 
         X_file, seq_len_file, y_file, pid_list_file = data_preprocessing(df, balancing_dict, CURVES_DEFAULT_LEN,  \
             to_balance = to_balance, to_undersample = to_undersample, seed = seed)
 
         if pd.isna(X_file).any():
             print('There were NaNs so the file was not treated')
+            continue
+        if len(X_file) == 0:
             continue
 
         X.append(X_file)
@@ -226,8 +230,11 @@ def interp_sequences(sequences, max_len):
         f = interp1d(np.arange(original_len), s, 'quadratic', axis = 1)
         interp_seq = f(np.linspace(0, original_len -1, num = max_len))
         interp_obs[idx] = interp_seq
-
-    return np.stack(interp_obs)
+    
+    try:
+        return np.stack(interp_obs)
+    except ValueError:
+        return np.array([])
 
 
 def data_preprocessing(df, balancing_dict = None, max_len = None,  \
