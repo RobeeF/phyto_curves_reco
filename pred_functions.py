@@ -9,14 +9,13 @@ from dataset_preprocessing import interp_sequences, homogeneous_cluster_names
 import pandas as pd
 import numpy as np
 import scipy.integrate as it
-from dataset_preprocessing import scaler
 import fastparquet as fp
 import re
 from collections import Counter
 from copy import deepcopy
 
 
-def format_data(source_path, dest_folder, scale = False, \
+def format_data(source_path, dest_folder, \
                 is_ground_truth = True, hard_store = False):
     max_len = 120 # The standard length to which is sequence will be broadcasted
 
@@ -70,8 +69,6 @@ def format_data(source_path, dest_folder, scale = False, \
         
         X = np.transpose(obs_list, (0, 2, 1))
         
-        if scale:
-            X = scaler(X)
             
         if hard_store:
             # Store X, total_df, pid_list, true_labels in the same dir
@@ -95,7 +92,7 @@ def format_data(source_path, dest_folder, scale = False, \
         return [], [], [], []
         
 
-def predict(source_path, dest_folder, model, tn, scale = False,\
+def predict(source_path, dest_folder, model, tn,\
             is_ground_truth = True, precomputed_data_dir = ''):
     ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
     source_path (str): The path to the file containing the formatted unlabeled data
@@ -123,7 +120,7 @@ def predict(source_path, dest_folder, model, tn, scale = False,\
             true_labels = np.load(dest_folder + '/'+ file_name + '_true_labels.npz')['arr_0']
         
     else:
-        X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, scale = scale, \
+        X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, \
                         is_ground_truth = is_ground_truth, hard_store = False)
             
     if len(X) > 0:

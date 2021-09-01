@@ -11,23 +11,26 @@ import matplotlib.pyplot as plt
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
 
-def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = None):
+def plot_2Dcyto(X, y, q1, q2, colors = None, str_labels = False, title = None):
     ''' Plot a 2D cytogram of dimension q1 vs dimension q2 
     X (n x curve_length x nb_curves ndarray): The curves representing the particules
     '''
     
+    classes = list(set(y))
+    classes.sort()
+    
     if colors == None:
-        #colors = ['#96ceb4', 'gold', 'black', 'green', 'grey', 'red', 'purple', 'blue', 'silver']
-        colors = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red',\
-                  'purple', 'blue', 'brown', 'grey']
-
-    fig, ax1 = plt.subplots(1,1, figsize=(11, 11))
-    for id_, label in enumerate(list(tn['label'])):
         
-        if str_labels:
-            obs = X[y == label]
-        else:
-            obs = X[y == id_]
+        colors_codes = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red',\
+                  'purple', 'blue', 'brown', 'grey']
+        colors = zip(classes, color_codes[:len(classes)])
+
+
+    
+    fig, ax1 = plt.subplots(1,1, figsize=(11, 11))
+    for id_, label in enumerate(classes):
+        
+        obs = X[y == label]
         
         # Format the label of noise particles
         if re.search('sup1microm', label):
@@ -47,7 +50,7 @@ def plot_2Dcyto(X, y, tn, q1, q2, colors = None, str_labels = False, title = Non
         formatted_label = re.sub('plancton', 'plankton', formatted_label)
         
         #print(formatted_label)
-        ax1.scatter(obs[q1], obs[q2], c = colors[id_], label= formatted_label, s = 1.5)
+        ax1.scatter(obs[q1], obs[q2], c = colors[label], label= formatted_label, s = 1.5)
         ax1.legend(loc= 'upper left', shadow=True, fancybox=True,\
                    prop={'size': 14}, ncol=2, markerscale = 4.0)
 

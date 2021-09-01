@@ -3,13 +3,16 @@ import numpy as np
 import re
 import pandas as pd
 import fastparquet as fp
+import scipy.integrate as it
+from collections import Counter
 
-from imblearn.under_sampling import RandomUnderSampler
+from copy import deepcopy
+from sklearn.cluster import KMeans
+from scipy.interpolate import interp1d
+from scipy.spatial.distance import cdist
 from sklearn.preprocessing import LabelEncoder
 from keras.utils.np_utils import to_categorical
-from scipy.interpolate import interp1d
-from sklearn.preprocessing import MinMaxScaler
-from copy import deepcopy
+from imblearn.under_sampling import RandomUnderSampler
 
 
 def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
@@ -202,7 +205,7 @@ def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extrac
 
     # Encode y and taking care of missing classes
     y = le.transform(y)
-    y =  to_categorical(y, num_classes = len(cluster_classes))
+    y = to_categorical(y, num_classes = len(cluster_classes))
 
     pid_list = np.concatenate(pid_list)
     seq_len_list = np.concatenate(seq_len_list)
@@ -319,13 +322,12 @@ def homogeneous_cluster_names(array):
     '''
 
     bubble_pat = '[_A-Za-z0-9?\-()]*bubble[_A-Za-z()0-9?\-]*'
-    crypto_pat = '[_A-Za-z0-9?\-()]*crypto[_A-Za-z()0-9?\-]*'
-    pico_pat = '[_A-Za-z0-9?\-()]*pico[_A-Za-z()0-9?\-]*'
-    nano_pat = '[_A-Za-z0-9?\-()]*nano[_A-Za-z()0-9?\-]*'
-    micro_pat = '[_A-Za-z0-9?\-()]*microp[_A-Za-z()0-9?\-]*'
-    prochlo_pat = '[_A-Za-z0-9?\-()]*prochlo[_A-Za-z()0-9?\-]*'
-    synecho_pat = '[_A-Za-z0-9?\-()]*synecho[_A-Za-z()0-9?\-]*'
-    #noise_pat = '[_A-Za-z0-9?\-()]*noise[_A-Za-z()0-9?\-]*'
+    crypto_pat = '[_A-Za-z0-9?\-()]*[Cc]rypto[_A-Za-z()0-9?\-]*'
+    pico_pat = '[_A-Za-z0-9?\-()]*[pP]ico[_A-Za-z()0-9?\-]*'
+    nano_pat = '[_A-Za-z0-9?\-()]*[Nn]ano[_A-Za-z()0-9?\-]*'
+    micro_pat = '[_A-Za-z0-9?\-()]*[Mm]icrop[_A-Za-z()0-9?\-]*'
+    prochlo_pat = '[_A-Za-z0-9?\-()]*[Pp]rochlo[_A-Za-z()0-9?\-]*'
+    synecho_pat = '[_A-Za-z0-9?\-()]*[Ss]ynecho[_A-Za-z()0-9?\-]*'
     lowfluo_pat = '[_A-Za-z0-9?\-()]*low[ _0-9]{0,1}fluo[_A-Za-z()0-9?\-]*'
     noiseinf_pat = '[_A-Za-z0-9?\-()]*noise[ _0-9]{0,1}in[fg][_A-Za-z()0-9?\-]*'
     noisesup_pat = '[_A-Za-z0-9?\-()]*noise[ _0-9]{0,1}sup[_A-Za-z()0-9?\-]*'
@@ -449,28 +451,16 @@ def homogeneous_cluster_names_swings(array):
     '''
     if type(array) == pd.core.frame.DataFrame:
         array['cluster'] = array['cluster'].str.replace('bruitdefond', 'Unassigned Particles')
-        array['cluster'] = array['cluster'].str.replace('([A-Za-z]+)_[A-Za-z]+', r'\1', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace('[A-Za-z]+MICRO', 'MICRO', regex = True, case = False)
+        array['cluster'] = array['cluster'].str.replace('([A-Za-z]+)_[A-Za-z0-9]+', r'\1', regex = True, case = False)
         
     else:
         array = [re.sub('bruitdefond', 'Unassigned Particles', string) for string in array]
-        array = [re.sub(r'([A-Za-z]+)_[A-Za-z]+', r'\1', string) for string in array]
+        array = [re.sub('[A-Za-z]+MICRO', 'MICRO', string) for string in array]
+        array = [re.sub(r'([A-Za-z]+)_[A-Za-z0-9]+', r'\1', string) for string in array]
         
-    return array    
+    return array  
 
-def scaler(X):
-    ''' Scale the data. For the moment only minmax scaling is implemented'''
-    X_mms = []
-
-    # load data
-    # create scaler
-    scaler = MinMaxScaler()
-    # fit and transform in one step
-    for obs in X:
-        normalized = scaler.fit_transform(obs)
-        X_mms.append(normalized)
-
-    X_mms = np.stack(X_mms)
-    return X_mms
 
 
 def extract_features_from_nn(dataset, pre_model):
@@ -484,3 +474,134 @@ def extract_features_from_nn(dataset, pre_model):
     features = pre_model.predict(dataset, batch_size=32)
     features_flatten = features.reshape((features.shape[0], -1))
     return features_flatten
+
+
+def split_noise(df_, is_FlYellow = True):
+    '''
+    Split the noise between "small" and big "noise" particles using KMeans
+    df (pd DataFrame): DataFrame containing Pulse data for all particles
+    ---------------------------------------------------------------
+    returns (pd DataFrame): The data with a splitted noise
+    '''
+
+    # Dirty: avoid to modify the original object
+    df = deepcopy(df_)
+     
+    # To account for Orange Fluorescence       
+    fl2 = 'Fl Yellow' if is_FlYellow else 'FL Orange'
+    
+    noise_cells = df[df['cluster'] == 'Unassigned Particles']
+    noise_df = noise_cells.reset_index().groupby('Particle ID').agg(
+    {
+          'FWS': it.trapz,
+          'SWS': it.trapz,
+          fl2: it.trapz,
+          'FL Red': it.trapz,
+          'Curvature': it.trapz, 
+          'cluster': lambda x: list(x)[0] # Fetch the name of the cluster for each particle   
+    })
+      
+    # Select noise particles 
+    X = noise_df.iloc[:,:4]
+      
+    # Perform the KMeans on Total FLR, Total FWS, Total FLO and Total SWS
+    kmeans = KMeans(n_clusters=2, random_state=0,  n_init = 100, algorithm= 'full').fit(np.log(X + 1E-16))
+    labels = kmeans.labels_
+      
+    # Store the new labels in a new column
+    noise_df['cluster2'] = labels
+    class_size = noise_df.groupby('cluster2')['FWS'].mean()
+    noise_df['cluster2'] = noise_df['cluster2'].astype(str).replace(str(class_size.argmax()), 'sup1microm') # The biggest class is the sup1microm
+    noise_df['cluster2'] = noise_df['cluster2'].astype(str).replace(str(class_size.argmin()), 'inf1microm') # The lowest class is the inf1microm
+      
+    # Erase the old cluster labels 
+    noise_cells = noise_cells.set_index('Particle ID').join(noise_df['cluster2'])
+    del(noise_cells['cluster'])
+    cols = list(noise_cells.columns)
+    cols[-1] = 'cluster'
+    noise_cells.columns = cols
+      
+    # Replace the noise entries by the new noise entries
+    df = df.set_index('Particle ID')
+    non_noise_index = set(df.index) - set(noise_cells.index)
+    df = df.loc[non_noise_index]
+    df = pd.concat([df, noise_cells]).sort_index()
+    
+    return df
+
+
+
+def centroid_sampling(X, y, sampling_strategy, columns, seed = None):
+  '''
+    Per class sampling strategy: The furthest from the class centroid, the more likely for a point 
+    to be sampled
+    X (pandas DataFrame): The integrated five curves issued by AFCM. Index: Filename and Particle ID
+    y (pandas Series): The label of each particle issued by AFCM. Index: Filename and Particle ID
+    sampling_strategy (dict): Keys: The cluster names, values: the number of observations to sample
+    -----------------------------------------------------------------------------------------------
+    returns (X, y): The undersampled X and y DataFrames 
+  '''
+
+  # Cluster classes and number of particles per class
+  cluster_classes = sampling_strategy.keys()
+  nb_classes = len(cluster_classes)
+
+  # Storages
+  X_total_train = pd.DataFrame()
+  y_total_train = pd.DataFrame()
+
+  # Compute the centroids
+  centroids = X.join(y)[columns + ['cluster']].groupby('cluster').mean()
+
+  for i in range(nb_classes):
+    # Compute the distance to centroids for each group
+    cluster_label = centroids.index[i]
+    cluster_data = X[y == cluster_label]
+    obs = np.log(cluster_data[columns] + 10-8).values
+    cc = np.log(centroids.iloc[i,:4].values.reshape(1,-1))
+    dm = cdist(obs, cc)
+
+    # Delete outliers and compute the sampling probability
+    q99 = np.quantile(dm, 0.99)
+    dm = np.where(dm >= q99, 1E-2, dm)
+    p = dm /dm.sum()
+
+    # Sample the data 
+    nb_obs = len(obs)
+    indices = range(nb_obs)
+    nb_to_sample = sampling_strategy[cluster_label]
+    sampled_indices = np.random.choice(a = indices, size = nb_to_sample, p = p.reshape(-1), replace = False)
+    sampled_data = cluster_data.iloc[sampled_indices]
+
+    # Store the data
+    X_total_train = X_total_train.append(sampled_data)
+    y_file = pd.DataFrame([cluster_label] * nb_to_sample, index = sampled_data.index, columns = ['cluster'])
+    y_total_train = y_total_train.append(y_file)
+
+
+  return X_total_train, y_total_train 
+
+
+def quick_preprocessing(df, columns):
+  '''
+    Preprocess the curves for network predictions (short version of the data_preprocessing function).
+    df (pandas DataFrame): The total curves (as in the .parq files)
+    ------------------------------------------------------------------
+    returns (np.array, list): The formatted curves and the associated class 
+    Note: Some Refactoring is needed
+  '''
+
+  max_len = 120
+  # Reformatting the values
+  obs_list = [] # The 5 curves
+  y_list = [] # The class (e.g. 0 = prochlorocchoccus, 1= ...)
+
+  for pid, obs in df.groupby('Particle ID'):
+      obs_list.append(obs[columns].values.T)
+      y_list.append(list(set(obs['cluster']))[0])
+
+  #print(obs.columns)
+  obs_list = interp_sequences(obs_list, max_len)
+
+  X = np.transpose(obs_list, (0, 2, 1))
+  return X, y_list

@@ -5,31 +5,22 @@ Created on Thu Jul 30 11:10:01 2020
 @author: rfuchs
 """
 
-from __future__ import print_function
+import pickle
 import numpy as np
+import pandas as pd
 
-from hyperopt import Trials, STATUS_OK, tpe
 
 from hyperas import optim
+from hyperopt import Trials, STATUS_OK, tpe
 from hyperas.distributions import choice, uniform, normal
 
-import os
-import pickle
-from collections import Counter
-import pandas as pd
-from imblearn.under_sampling import RandomUnderSampler
-from keras.layers import Input, Conv1D,  GlobalAveragePooling1D, Dense, Dropout
-from keras.models import Model
-
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, precision_score, recall_score
 
-from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
-
-from keras import optimizers
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow_addons.optimizers import RectifiedAdam, Lookahead
 
-from sklearn.preprocessing import StandardScaler
 
 ##############################################################################################
 #################  Model 13 Hyper-parameters tuning on FUMSECK Data ##########################
