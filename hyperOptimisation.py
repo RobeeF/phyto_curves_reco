@@ -5,11 +5,11 @@ Created on Thu Apr  9 13:48:42 2020
 @author: rfuchs
 """
 
+import os
 import sys
 import numpy as np
 import pickle
 import pandas as pd
-from collections import Counter
 from sklearn.metrics import confusion_matrix, precision_score
 
 import tensorflow as tf
@@ -41,18 +41,15 @@ def data():
     valid = np.load(data_dir + 'valid.npz', allow_pickle = True)
     test = np.load(data_dir + 'test.npz', allow_pickle = True)
 
-    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
 
     X_train = train['X']
     X_valid = valid['X']
     X_test = test['X']
 
-
     y_train = train['y']
     y_valid = valid['y']
     y_test = test['y']
 
-    tn.columns = ['Particle_class', 'label']
     
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
@@ -103,8 +100,10 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     model_dir = sys.argv[3]
     model_name = sys.argv[4]
     loss_name = sys.argv[5]
+    nb_epochs = int(sys.argv[6])
 
-    weights_path = model_dir + 'weights_' + loss + '_' +  model_name + '.hdf5'
+
+    weights_path = model_dir + 'weights_' + loss_name + '_' +  model_name + '.hdf5'
     
     es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=10)
     check = ModelCheckpoint(filepath = weights_path,\
@@ -114,13 +113,13 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     lr = {{uniform(1e-3, 1e-2)}} 
 
     if optim_ch == 'adam':
-        optim = tf.keras.optimizers.Adam(lr = lr)
+        optim = tf.keras.optimizers.Adam(learning_rate = lr)
         sync_period = None
         slow_step_size = None
     else:
         sync_period = {{choice([1, 3])}}
         slow_step_size = {{normal(0.5, 0.1)}}
-        rad = RectifiedAdam(lr = lr)
+        rad = RectifiedAdam(learning_rate = lr)
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
 
     # Batch size definition
@@ -144,7 +143,8 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
         result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = 50, class_weight = w, shuffle=True, verbose=2, callbacks = [check, es])
+                    epochs = nb_epochs, class_weight = w, shuffle=True, verbose=2,\
+                    callbacks = [check, es])
         
     elif loss_name == 'Class_balanced':
         beta = {{choice([0.9, 0.999, 0.9999])}} #remettre 0.99,0.99993
@@ -155,6 +155,10 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)],
                       metrics=['accuracy'], optimizer = optim)
         
+        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
+                        steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
+                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
+        
     elif loss_name == 'Focal_loss':
         alpha = {{uniform(0, 1)}}
         gamma = {{uniform(0.5, 2.5)}}
@@ -164,7 +168,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     
         result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                         steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                        epochs = 30, shuffle=True, verbose=2, callbacks = [check, es])
+                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
     else:
         raise ValueError('Please enter a legal loss name')
 
@@ -177,6 +181,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
 
 
 if __name__ == '__main__':
+    data_dir = sys.argv[1]
     model_dir = sys.argv[3]
     model_name = sys.argv[4]
 
@@ -187,25 +192,40 @@ if __name__ == '__main__':
                                           trials = Trials())
     
     X_train, y_train, X_valid, y_valid, X_test, y_test = data()
-    
-    print("Evaluation of best performing model:")
-    preds = best_model.predict(X_test)
-    print('Micro accuracy: ', precision_score(y_test.argmax(1), preds.argmax(1), average = 'micro', labels = list(range(y_test.shape[1]))))
-    print('Classes accuracy: ', precision_score(y_test.argmax(1), preds.argmax(1), average = None, labels = list(range(y_test.shape[1]))))
-    print('Macro accuracy: ', precision_score(y_test.argmax(1), preds.argmax(1), average = 'macro', labels = list(range(y_test.shape[1]))))
 
-    tn = pd.read_csv('/content/gdrive/My Drive/data/SWINGS/L1_retreated/67 percent_7 sets/train_test_nomenclature.csv')
-    print('\n')
-    pd.set_option("display.max_rows", None, "display.max_columns", None) 
-    print(pd.DataFrame(confusion_matrix(y_test.argmax(1), preds.argmax(1),\
-                            labels = tn['labels']), index = tn['cluster'], columns =  tn['cluster']))
-   
+    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
+    
+    #======================================
+    # Save the best model
+    #======================================
+    
     print("Best performing model chosen hyper-parameters:")
     print(best_run)
-    with open('cnn_categ_best_params.pickle', 'wb') as handle:
-        pickle.dump(model_dir + best_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    with open(model_dir + model_name + '.pickle', 'wb') as handle:
+        pickle.dump(best_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     best_model.save(model_dir + model_name)
     print('best model saved in:', os.getcwd())
-        
+  
+    #======================================
+    # Evaluate the best model on test data
+    #======================================
+
+    print("Evaluation of best performing model:")
+    preds = best_model.predict(X_test)
+    class_accuracy = precision_score(y_test.argmax(1), preds.argmax(1),\
+                                     average = None, labels = list(range(y_test.shape[1])))
+
+    print('Micro accuracy: ', precision_score(y_test.argmax(1), preds.argmax(1),\
+                                    average = 'micro', labels = list(range(y_test.shape[1]))))
+    print('Classes accuracy: ', dict(zip(tn['name'], class_accuracy)))
+    print('Macro accuracy: ', precision_score(y_test.argmax(1), preds.argmax(1),\
+                                    average = 'macro', labels = list(range(y_test.shape[1]))))
+
+    print('\n')
+    pd.set_option("display.max_rows", None, "display.max_columns", None) 
+    print(pd.DataFrame(confusion_matrix(y_test.argmax(1), preds.argmax(1),\
+                        labels = tn['id']), index = tn['name'], columns =  tn['name']))
+   
         

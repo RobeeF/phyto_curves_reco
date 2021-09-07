@@ -168,7 +168,8 @@ def extract_non_labeled_curves(data_source, data_destination, flr_num = 6):
     ---------------------------------------------------------------------------------------------
     returns (None): Write the labelled Pulse shapes on hard disk
     '''
-    assert (flr_num == 6) or (flr_num == 11) or (flr_num == 25) 
+    #assert (flr_num == 6) or (flr_num == 11) or (flr_num == 25) 
+    flr_num = int(flr_num)
     
     nb_files_already_processed = 0
     log_file = data_destination + "/pred_logs.txt" # Register where write the already predicted files
