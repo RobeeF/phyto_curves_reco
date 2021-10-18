@@ -57,26 +57,22 @@ def data():
 
     train = np.load(data_dir + 'train.npz', allow_pickle = True)
     valid = np.load(data_dir + 'valid.npz', allow_pickle = True)
-    test = np.load(data_dir + 'test.npz', allow_pickle = True)
 
     X_train = train['X']
     X_valid = valid['X']
-    X_test = test['X']
 
     y_train = train['y']
     y_valid = valid['y']
-    y_test = test['y']
 
     # Scale the data for numeric stability
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_valid = scaler.fit_transform(X_valid)
-    X_test = scaler.fit_transform(X_test)
 
-    return X_train, y_train, X_valid, y_valid, X_test, y_test
+    return X_train, y_train, X_valid, y_valid
 
 
-def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
+def create_model(X_train, y_train, X_valid, y_valid):
     """
     Model providing function:
 
@@ -205,11 +201,7 @@ if __name__ == '__main__':
                                           algo = tpe.suggest,
                                           max_evals = int(sys.argv[2]), 
                                           trials = Trials())
-    
-    X_train, y_train, X_valid, y_valid, X_test, y_test = data()
-
-    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
-    
+        
     #======================================
     # Save the best model
     #======================================
@@ -226,7 +218,17 @@ if __name__ == '__main__':
     #======================================
     # Evaluate the best model on test data
     #======================================
+    
+    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
+    
+    test = np.load(data_dir + 'test.npz', allow_pickle = True)
+    scaler = StandardScaler()
+    X_test = test['X']
+    X_test = scaler.fit_transform(X_test)
 
+    y_test = test['y']
+
+    
     print("Evaluation of best performing model:")
     preds = best_model.predict(X_test)
     class_accuracy = precision_score(y_test.argmax(1), preds.argmax(1),\

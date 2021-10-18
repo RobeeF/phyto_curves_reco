@@ -39,22 +39,21 @@ def data():
 
     train = np.load(data_dir + 'train.npz', allow_pickle = True)
     valid = np.load(data_dir + 'valid.npz', allow_pickle = True)
-    test = np.load(data_dir + 'test.npz', allow_pickle = True)
-
+    #test = np.load(data_dir + 'test.npz', allow_pickle = True)
 
     X_train = train['X']
     X_valid = valid['X']
-    X_test = test['X']
+    #X_test = test['X']
 
     y_train = train['y']
     y_valid = valid['y']
-    y_test = test['y']
+    #y_test = test['y']
 
     
-    return X_train, y_train, X_valid, y_valid, X_test, y_test
+    return X_train, y_train, X_valid, y_valid
 
 
-def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
+def create_model(X_train, y_train, X_valid, y_valid):
     """
     Model providing function:
 
@@ -76,7 +75,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
     sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
 
     # A 1D convolution with 128 output channels: Extract features from the curves
-    filter_size = {{choice([3, 5, 7])}}
+    filter_size = {{choice([3, 5])}} # Earlier on: 3, 5, 7
     x = tf.keras.layers.Conv1D(32, filter_size, activation='relu')(sequence_input)
     x = tf.keras.layers.Conv1D(16, filter_size, activation='relu')(x)
     x = tf.keras.layers.Conv1D(8, filter_size, activation='relu')(x)
@@ -123,7 +122,7 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
 
     # Batch size definition
-    batch_size = {{choice([64 * 8, 64 * 4])}}
+    batch_size = 64 * 8#{{choice([64 * 8, 64 * 4])}}
     STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1
     STEP_SIZE_VALID = (len(X_valid) // (64 * 8)) + 1
     
@@ -145,7 +144,8 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
                     steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
                     epochs = nb_epochs, class_weight = w, shuffle=True, verbose=2,\
                     callbacks = [check, es])
-        
+     
+    '''
     elif loss_name == 'Class_balanced':
         beta = {{choice([0.9, 0.999, 0.9999])}} #remettre 0.99,0.99993
         gamma = {{uniform(0.5, 2.5)}}
@@ -169,8 +169,10 @@ def create_model(X_train, y_train, X_valid, y_valid, X_test, y_test):
         result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
                         steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
                         epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
+    
     else:
         raise ValueError('Please enter a legal loss name')
+    '''
 
 
     #Get the highest validation accuracy of the training epochs
@@ -191,10 +193,6 @@ if __name__ == '__main__':
                                           max_evals = int(sys.argv[2]), 
                                           trials = Trials())
     
-    X_train, y_train, X_valid, y_valid, X_test, y_test = data()
-
-    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
-    
     #======================================
     # Save the best model
     #======================================
@@ -211,6 +209,11 @@ if __name__ == '__main__':
     #======================================
     # Evaluate the best model on test data
     #======================================
+    
+    tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv') 
+    test = np.load(data_dir + 'test.npz', allow_pickle = True)
+    X_test = test['X']
+    y_test = test['y']
 
     print("Evaluation of best performing model:")
     preds = best_model.predict(X_test)
@@ -228,4 +231,3 @@ if __name__ == '__main__':
     print(pd.DataFrame(confusion_matrix(y_test.argmax(1), preds.argmax(1),\
                         labels = tn['id']), index = tn['name'], columns =  tn['name']))
    
-        

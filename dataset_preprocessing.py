@@ -531,7 +531,7 @@ def split_noise(df_, is_FlYellow = True):
 
 
 
-def centroid_sampling(X, y, sampling_strategy, columns, seed = None):
+def centroid_sampling(X, y, sampling_strategy, columns, random_state = None):
   '''
     Per class sampling strategy: The furthest from the class centroid, the more likely for a point 
     to be sampled
@@ -541,7 +541,8 @@ def centroid_sampling(X, y, sampling_strategy, columns, seed = None):
     -----------------------------------------------------------------------------------------------
     returns (X, y): The undersampled X and y DataFrames 
   '''
-
+  
+  np.random.seed(random_state)
   # Cluster classes and number of particles per class
   cluster_classes = sampling_strategy.keys()
   nb_classes = len(cluster_classes)
@@ -557,14 +558,15 @@ def centroid_sampling(X, y, sampling_strategy, columns, seed = None):
     # Compute the distance to centroids for each group
     cluster_label = centroids.index[i]
     cluster_data = X[y == cluster_label]
-    obs = np.log(cluster_data[columns] + 10-8).values
+    obs = np.log(cluster_data[columns] + 1E-8).values
     cc = np.log(centroids.iloc[i,:4].values.reshape(1,-1))
     dm = cdist(obs, cc)
 
     # Delete outliers and compute the sampling probability
-    q99 = np.quantile(dm, 0.99)
-    dm = np.where(dm >= q99, 1E-2, dm)
-    p = dm /dm.sum()
+    #q99 = np.quantile(dm, 0.99)
+    #dm = np.where(dm >= q99, 1E-2, dm)
+    dm = 1 / ((dm + 1E-8) ** 3) 
+    p = dm / dm.sum()
 
     # Sample the data 
     nb_obs = len(obs)
@@ -577,7 +579,6 @@ def centroid_sampling(X, y, sampling_strategy, columns, seed = None):
     X_total_train = X_total_train.append(sampled_data)
     y_file = pd.DataFrame([cluster_label] * nb_to_sample, index = sampled_data.index, columns = ['cluster'])
     y_total_train = y_total_train.append(y_file)
-
 
   return X_total_train, y_total_train 
 
