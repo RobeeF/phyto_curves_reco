@@ -227,7 +227,7 @@ def interp_sequences(sequences, max_len):
         returns (ndarray): The interpolated sequences
     '''
 
-    interp_obs = np.zeros((len(sequences), 5, 120))
+    interp_obs = np.zeros((len(sequences), 5, max_len))
     for idx, s in enumerate(sequences):
         original_len = s.shape[1]
         f = interp1d(np.arange(original_len), s, 'quadratic', axis = 1)

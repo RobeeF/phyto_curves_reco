@@ -24,6 +24,8 @@ def plot_2Dcyto(X, y, q1, q2, colors = None, str_labels = False, title = None):
         colors_codes = ['#96ceb4', 'gold', 'lawngreen', 'black', 'green', 'red',\
                   'purple', 'blue', 'brown', 'grey']
         colors = dict(zip(classes, colors_codes[:len(classes)]))
+
+
     
     fig, ax1 = plt.subplots(1,1, figsize=(11, 11))
     for id_, label in enumerate(classes):

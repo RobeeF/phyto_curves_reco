@@ -1,4 +1,4 @@
-1# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Created on Thu Apr  9 13:48:42 2020
 
@@ -39,16 +39,12 @@ def data():
 
     train = np.load(data_dir + 'train.npz', allow_pickle = True)
     valid = np.load(data_dir + 'valid.npz', allow_pickle = True)
-    #test = np.load(data_dir + 'test.npz', allow_pickle = True)
 
     X_train = train['X']
     X_valid = valid['X']
-    #X_test = test['X']
 
     y_train = train['y']
     y_valid = valid['y']
-    #y_test = test['y']
-
     
     return X_train, y_train, X_valid, y_valid
 
@@ -65,9 +61,6 @@ def create_model(X_train, y_train, X_valid, y_valid):
         - model: specify the model just created so that we can later use it again.
     """
 
-
-    dp = {{uniform(0, 0.5)}}
-
     N_CLASSES = y_train.shape[1]
     max_len = X_train.shape[1]
     nb_curves = X_train.shape[2]
@@ -75,23 +68,23 @@ def create_model(X_train, y_train, X_valid, y_valid):
     sequence_input = tf.keras.layers.Input(shape=(max_len, nb_curves), dtype='float32')
 
     # A 1D convolution with 128 output channels: Extract features from the curves
-    filter_size = {{choice([3, 5])}} # Earlier on: 3, 5, 7
-    x = tf.keras.layers.Conv1D(32, filter_size, activation='relu')(sequence_input)
-    x = tf.keras.layers.Conv1D(16, filter_size, activation='relu')(x)
-    x = tf.keras.layers.Conv1D(8, filter_size, activation='relu')(x)
+    kernel_size = 3 # Earlier on: 3, 5, 7
+    x = tf.keras.layers.Conv1D(filters = 32, kernel_size = kernel_size, activation='relu')(sequence_input)
+    x = tf.keras.layers.Conv1D(filters = 32, kernel_size = kernel_size, activation='relu')(x)
+    x = tf.keras.layers.AveragePooling1D(pool_size=2, strides=None, padding="valid", data_format="channels_last")(x)
+    x = tf.keras.layers.Conv1D(filters = 64, kernel_size = kernel_size, activation='relu')(x)
+    x = tf.keras.layers.Conv1D(filters = 64, kernel_size = kernel_size, activation='relu')(x)
+    x = tf.keras.layers.AveragePooling1D(pool_size=2, strides=None, padding="valid", data_format="channels_last")(x)
+    x = tf.keras.layers.Conv1D(filters = 128, kernel_size = kernel_size, activation='relu')(x)
+    x = tf.keras.layers.Conv1D(filters = 128, kernel_size = kernel_size, activation='relu')(x)
+    x = tf.keras.layers.Conv1D(filters = 128, kernel_size = kernel_size, activation='relu')(x)
     
     # Average the created features maps
-    average = tf.keras.layers.GlobalAveragePooling1D()(x)
-    dense2 = tf.keras.layers.Dense(32, activation='relu')(average) 
-    drop2 = tf.keras.layers.Dropout(dp)(dense2)
-    dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
-    drop3 = tf.keras.layers.Dropout(dp)(dense3)
-    dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
-    drop4 = tf.keras.layers.Dropout(dp)(dense4)
-    
-    predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
-    model = tf.keras.Model(sequence_input, predictions)
+    average = tf.keras.layers.GlobalAveragePooling1D(data_format='channels_last')(x)
+    dense2 = tf.keras.layers.Dense(216, activation='relu')(average) 
 
+    predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(dense2)
+    model = tf.keras.Model(sequence_input, predictions)
 
     #==================================================
     # Specifying the optimizer
@@ -108,21 +101,16 @@ def create_model(X_train, y_train, X_valid, y_valid):
     check = ModelCheckpoint(filepath = weights_path,\
                             verbose = 1, save_best_only=True)
 
-    optim_ch = {{choice(['adam', 'ranger'])}}
+    optim_ch = 'ranger'
     lr = {{uniform(1e-3, 1e-2)}} 
 
-    if optim_ch == 'adam':
-        optim = tf.keras.optimizers.Adam(learning_rate = lr)
-        sync_period = None
-        slow_step_size = None
-    else:
-        sync_period = {{choice([1, 3])}}
-        slow_step_size = {{normal(0.5, 0.1)}}
-        rad = RectifiedAdam(learning_rate = lr)
-        optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
+    sync_period = {{choice([1, 3])}}
+    slow_step_size = {{normal(0.5, 0.1)}}
+    rad = RectifiedAdam(learning_rate = lr)
+    optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
 
     # Batch size definition
-    batch_size = 64 * 8#{{choice([64 * 8, 64 * 4])}}
+    batch_size = {{choice([64 * 2, 64 * 4])}} 
     STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1
     STEP_SIZE_VALID = (len(X_valid) // (64 * 8)) + 1
     
@@ -131,11 +119,10 @@ def create_model(X_train, y_train, X_valid, y_valid):
     #==============================================
     
     if loss_name == 'categorical_crossentropy':
-        # Defining the weights: Take the average over SSLAMM data
-        weights = {{uniform(0, 1)}}
-        w = 1 / (np.sum(y_valid, axis = 0)) ** weights
-        w = w / w.sum()
+        
+        w = np.full(N_CLASSES, 1 / N_CLASSES)
         w = dict(zip(range(N_CLASSES),w))
+
         
         model.compile(loss='categorical_crossentropy',\
                       metrics=['accuracy'], optimizer=optim)
@@ -145,36 +132,6 @@ def create_model(X_train, y_train, X_valid, y_valid):
                     epochs = nb_epochs, class_weight = w, shuffle=True, verbose=2,\
                     callbacks = [check, es])
      
-    '''
-    elif loss_name == 'Class_balanced':
-        beta = {{choice([0.9, 0.999, 0.9999])}} #remettre 0.99,0.99993
-        gamma = {{uniform(0.5, 2.5)}}
-    
-        sample_per_class = np.sum(y_valid, axis = 0)
-    
-        model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)],
-                      metrics=['accuracy'], optimizer = optim)
-        
-        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
-                        steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
-        
-    elif loss_name == 'Focal_loss':
-        alpha = {{uniform(0, 1)}}
-        gamma = {{uniform(0.5, 2.5)}}
-        
-        model.compile(loss=[categorical_focal_loss(alpha = alpha, gamma = gamma)],
-                      metrics=['accuracy'], optimizer = optim)
-    
-        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
-                        steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
-    
-    else:
-        raise ValueError('Please enter a legal loss name')
-    '''
-
-
     #Get the highest validation accuracy of the training epochs
     loss_acc = np.amin(result.history['val_loss'])
     print('Min loss of epoch:', loss_acc)
@@ -230,4 +187,3 @@ if __name__ == '__main__':
     pd.set_option("display.max_rows", None, "display.max_columns", None) 
     print(pd.DataFrame(confusion_matrix(y_test.argmax(1), preds.argmax(1),\
                         labels = tn['id']), index = tn['name'], columns =  tn['name']))
-   

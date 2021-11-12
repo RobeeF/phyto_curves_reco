@@ -63,11 +63,25 @@ def data():
 
     y_train = train['y']
     y_valid = valid['y']
+    
+    # Fetch the NaN indices
+    nan_train = np.isnan(X_train).any(1)
+    nan_valid = np.isnan(X_valid).any(1)
+    
+    # Delete NaNs observations
+    X_train = X_train[~nan_train]
+    y_train = y_train[~nan_train]
+    
+    X_valid = X_valid[~nan_valid]
+    y_valid = y_valid[~nan_valid]
 
     # Scale the data for numeric stability
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_valid = scaler.fit_transform(X_valid)
+    #scaler = StandardScaler()
+    X_train = X_train / X_train.max()
+    X_valid = X_valid / X_valid.max()
+
+    #X_train = scaler.fit_transform(X_train)
+    #X_valid = scaler.fit_transform(X_valid)
 
     return X_train, y_train, X_valid, y_valid
 
@@ -92,11 +106,11 @@ def create_model(X_train, y_train, X_valid, y_valid):
     sequence_input = tf.keras.layers.Input(shape= nb_features, dtype='float32')
 
 
-    dense2 = tf.keras.layers.Dense(32, activation='relu')(sequence_input) # Does using 2*32 layers make sense ?
+    dense2 = tf.keras.layers.Dense(64, activation='relu')(sequence_input) # Does using 2*32 layers make sense ?
     drop2 = tf.keras.layers.Dropout(dp)(dense2)
-    dense3 = tf.keras.layers.Dense(16, activation='relu')(drop2)
+    dense3 = tf.keras.layers.Dense(32, activation='relu')(drop2)
     drop3 = tf.keras.layers.Dropout(dp)(dense3)
-    dense4 = tf.keras.layers.Dense(8, activation='relu')(drop3)
+    dense4 = tf.keras.layers.Dense(16, activation='relu')(drop3)
     drop4 = tf.keras.layers.Dropout(dp)(dense4)
 
     predictions = tf.keras.layers.Dense(N_CLASSES, activation='softmax')(drop4)
@@ -110,77 +124,52 @@ def create_model(X_train, y_train, X_valid, y_valid):
     model_name = sys.argv[4]
     loss_name = sys.argv[5]
     nb_epochs = int(sys.argv[6])
-    
+
+
     weights_path = model_dir + 'weights_' + loss_name + '_' +  model_name + '.hdf5'
     
-    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=10)
-    check = ModelCheckpoint(filepath = weights_path,\
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=15)
+    check = ModelCheckpoint(filepath=weights_path,\
                             verbose = 1, save_best_only=True)
 
 
     optim_ch = {{choice(['adam', 'ranger'])}}
-    lr = {{uniform(1e-3, 1e-2)}} 
+    lr = {{uniform(1e-3, 1e-2)}}
 
     if optim_ch == 'adam':
-        optim = tf.keras.optimizers.Adam(learning_rate = lr)
-        sync_period = None
-        slow_step_size = None
+        optim = tf.keras.optimizers.Adam(lr = lr)
     else:
-        sync_period = {{choice([1, 3])}}
+        sync_period = {{choice([2, 6, 10])}}
         slow_step_size = {{normal(0.5, 0.1)}}
-        rad = RectifiedAdam(learning_rate = lr)
+        rad = RectifiedAdam(lr = lr)
         optim = Lookahead(rad, sync_period = sync_period, slow_step_size = slow_step_size)
 
-    # Batch size definition
-    batch_size = {{choice([64 * 8, 64 * 4])}}
-    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1
-    STEP_SIZE_VALID = (len(X_valid) // (64 * 8)) + 1
-    
-    #==============================================
-    # Compile the model with the specified loss
-    #==============================================
-    
-    if loss_name == 'categorical_crossentropy':
-        # Defining the weights: Take the average over SSLAMM data
-        weights = {{uniform(0, 1)}}
-        w = 1 / (np.sum(y_valid, axis = 0)) ** weights
+
+    # Defining the weights: Take the average over SSLAMM data
+    weights = {{choice(['regular', 'sqrt'])}}
+
+    if weights == 'regular':
+        w = 1 / np.sum(y_train, axis = 0)
         w = w / w.sum()
-        w = dict(zip(range(N_CLASSES),w))
-        
-        model.compile(loss='categorical_crossentropy',\
-                      metrics=['accuracy'], optimizer=optim)
 
-        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
-                    steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                    epochs = nb_epochs, class_weight = w, shuffle=True, verbose=2,\
-                    callbacks = [check, es])
-        
-    elif loss_name == 'Class_balanced':
-        beta = {{choice([0.9, 0.999, 0.9999])}} #remettre 0.99,0.99993
-        gamma = {{uniform(0.5, 2.5)}}
-    
-        sample_per_class = np.sum(y_valid, axis = 0)
-    
-        model.compile(loss=[CB_loss(sample_per_class, beta = beta, gamma = gamma)],
-                      metrics=['accuracy'], optimizer = optim)
-        
-        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
-                        steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
-        
-    elif loss_name == 'Focal_loss':
-        alpha = {{uniform(0, 1)}}
-        gamma = {{uniform(0.5, 2.5)}}
-        
-        model.compile(loss=[categorical_focal_loss(alpha = alpha, gamma = gamma)],
-                      metrics=['accuracy'], optimizer = optim)
-    
-        result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
-                        steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
-                        epochs = nb_epochs, shuffle=True, verbose=2, callbacks = [check, es])
     else:
-        raise ValueError('Please enter a legal loss name')
+        w = 1 / np.sqrt(np.sum(y_train, axis = 0))
+        w = w / w.sum()
 
+    w = dict(zip(range(N_CLASSES), w))
+
+    batch_size = {{choice([64 * 4, 64 * 8])}}
+    STEP_SIZE_TRAIN = (len(X_train) // batch_size) + 1
+    STEP_SIZE_VALID = 1 
+       
+    model.compile(loss='categorical_crossentropy',\
+                  metrics=['accuracy'], optimizer=optim)
+
+    result = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), \
+                steps_per_epoch = STEP_SIZE_TRAIN, validation_steps = STEP_SIZE_VALID,\
+                epochs = nb_epochs, class_weight = w, shuffle=True, verbose=2,\
+                callbacks = [check, es])
+        
 
     #Get the highest validation accuracy of the training epochs
     loss_acc = np.amin(result.history['val_loss'])
@@ -222,11 +211,19 @@ if __name__ == '__main__':
     tn = pd.read_csv(data_dir + 'train_test_nomenclature.csv')
     
     test = np.load(data_dir + 'test.npz', allow_pickle = True)
-    scaler = StandardScaler()
     X_test = test['X']
-    X_test = scaler.fit_transform(X_test)
 
     y_test = test['y']
+    
+    # Delete NaN
+    nan_test = np.isnan(X_test).any(1)
+    X_test = X_test[~nan_test]
+    y_test = y_test[~nan_test]
+
+    #scaler = StandardScaler()
+    #X_test = scaler.fit_transform(X_test)
+    X_test = X_test / X_test.max()
+
 
     
     print("Evaluation of best performing model:")

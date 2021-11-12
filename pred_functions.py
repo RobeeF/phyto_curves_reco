@@ -11,11 +11,9 @@ import numpy as np
 import scipy.integrate as it
 import fastparquet as fp
 import re
-from collections import Counter
-from copy import deepcopy
 
 
-def format_data(source_path, dest_folder, \
+def format_data(source_path, dest_folder, fluo2 = 'FL Orange',\
                 is_ground_truth = True, hard_store = False):
     ''' Integrate the curves data
     source_path (str): The path to the file containing the formatted unlabeled data
@@ -58,13 +56,13 @@ def format_data(source_path, dest_folder, \
         else:   
             pid_list = list(set(df.index))
             
-        grouped_df = df[['SWS','FWS', 'FL Orange', 'FL Red', 'Curvature']].groupby('Particle ID')
+        grouped_df = df[['FWS', 'SWS', fluo2, 'FL Red', 'Curvature']].groupby('Particle ID')
     
         total_df = grouped_df.agg(
         {
              'FWS':it.trapz,    # Sum duration per group
              'SWS': it.trapz,  # get the count of networks
-             'FL Orange': it.trapz,
+              fluo2: it.trapz,
              'FL Red': it.trapz,
              'Curvature': it.trapz,
         })
@@ -109,7 +107,7 @@ def format_data(source_path, dest_folder, \
         return [], [], [], []
         
 
-def predict(source_path, dest_folder, model, tn,\
+def predict(source_path, dest_folder, model, tn, fluo2 = 'FL Orange',\
             is_ground_truth = True):
     ''' Predict the class of unlabelled data with a pre-trained model and store them in a folder
     source_path (str): The path to the file containing the formatted unlabeled data
@@ -126,26 +124,29 @@ def predict(source_path, dest_folder, model, tn,\
     # Format the data and predict their class
     #==========================================
         
-    X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, \
+    X, total_df, pid_list, true_labels = format_data(source_path, dest_folder, fluo2,\
                     is_ground_truth = is_ground_truth, hard_store = False)
 
     if len(X) > 0:
-        preds = np.argmax(model.predict(X), axis = 1)
+        preds_probas = model.predict(X)
+        preds = np.argmax(preds_probas, axis = 1)
         
         if is_ground_truth:
             formatted_preds = pd.DataFrame({'Particle ID': pid_list, \
                                             'Total FWS': total_df['FWS'], 'Total SWS': total_df['SWS'], \
-                                            'Total FLO': total_df['FL Orange'], 'Total FLR': total_df['FL Red'], \
+                                            'Total FLO': total_df[fluo2], 'Total FLR': total_df['FL Red'], \
                                             'Total CURV': total_df['Curvature'], \
                                             'True PFG id': None, 'True PFG name': true_labels, \
-                                            'Pred PFG id': preds, 'Pred PFG name': None}) 
+                                            'Pred PFG id': preds, 'Pred PFG name': None,\
+                                            'Pred PFG proba': preds_probas.max(1)}) 
     
         else:
             formatted_preds = pd.DataFrame({'Particle ID': pid_list, \
                                             'Total FWS': total_df['FWS'], 'Total SWS': total_df['SWS'], \
-                                            'Total FLO': total_df['FL Orange'], 'Total FLR': total_df['FL Red'], \
+                                            'Total FLO': total_df[fluo2], 'Total FLR': total_df['FL Red'], \
                                             'Total CURV': total_df['Curvature'], \
-                                            'Pred PFG id': preds, 'Pred PFG name': None})         
+                                            'Pred PFG id': preds, 'Pred PFG name': None,\
+                                            'Pred PFG proba': preds_probas.max(1)}) 
         
         #==========================================
         # Add string labels
