@@ -2,7 +2,7 @@
 
 `phyto_curves_reco` is a Python repository for automatic recognition of cytometric Phytoplankton Functional Groups (cPFG).
 It enables to format the curves issued by a Cytosense (an Automated Flow Cytometer manufactured by Cytobuoy, b.v.) and predict the cPFG of each particle thanks to a Convolutional Neural Network.
-The classes predicted correspond to six cPFGs described [here](http://vocab.nerc.ac.uk/collection/F02/current/):
+The classes predicted correspond to six cPFGs (described [here](http://vocab.nerc.ac.uk/collection/F02/current/)):
 - MICRO
 - ORGNANO
 - ORGPICOPRO
