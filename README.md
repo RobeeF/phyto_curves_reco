@@ -1,21 +1,20 @@
 # phyto_curves_reco
 
-`phyto_curves_reco` is a Python library for automatic recognition of cytometric Phytoplankton Functional Groups (cPFG).
-It enables to format the curves issued by a Cytosense (an Automated Flow Cytometer) and predict the cPFG of each particle thanks to a Convolutional Neural Network.
-The classes predicted correspond to six cPFGs:
-- Cryptophytes
-- Microphytoplankton
-- Nanoeukaryotes
-- Picoeukaryotes
-- Synechococcus
-- Prochlorococcus
+`phyto_curves_reco` is a Python repository for automatic recognition of cytometric Phytoplankton Functional Groups (cPFG).
+It enables to format the curves issued by a Cytosense (an Automated Flow Cytometer manufactured by Cytobuoy, b.v.) and predict the cPFG of each particle thanks to a Convolutional Neural Network.
+The classes predicted correspond to six cPFGs described here\url{}:
+- MICRO
+- ORGNANO
+- ORGPICOPRO
+- REDNANO
+- REDPICOEUK
+- REDPICOPRO
 
-In addition three other classes of particles can be identified by the Network
+In addition two other classes of particles can be identified by the Network
 - Noise particles smaller than 1 μm.
 - Noise particles bigger than 1 μm.
-- Airbubbles
 
-The final package will soon be available (February 2021).
+The final package will soon be available (February 2022).
 
 Before using the package, make sure you have CytoClus4 installed.
 Then extract the Pulse shape files of the acquisitions you want to classify into a local folder.
@@ -31,7 +30,6 @@ from from_cytoclus_to_curves_values import extract_labeled_curves, extract_non_l
 
 data_source = <source_folder>
 data_destination = <dest_folder>
-flr_num = 25 # And 6
 
 # Extract the data
 extract_non_labeled_curves(data_source, data_destination, flr_num = 6) # FLR6 acquisitions
@@ -105,115 +103,9 @@ for idx, file in enumerate(files_to_pred):
 ```
 
 The predictions are now available for each particle in the <pred_folder> folder.
-For each acquisition, the file contains: The ID of each particle, the Total FLR, FLO, Curvature, FWS and SWS (Areas under the curve) and the predicted class.
+For each acquisition, the file contains: The ID of each particle, the Total FLR, FLO/FLY, Curvature, FWS and SWS (Areas under the curve), the predicted class and the level of confidence of the prediction.
 
 # Count the number of particles in each class
 
-Then one can count the number of particles in each class. If you have only one acquisition no need to use the heavy loop presented in this section (just import the data with pandas.read_csv and use the value_counts method on the resulting DataFrame).
+Then one can count the number of particles in each class. If you have only one acquisition no need to use the heavy loop presented in this section (just import the data with fastparquet and use the value_counts method on the resulting DataFrame).
 If you have a whole time series instead, this loop could be useful.
-To boost the prediction power, some post-processing rules can be used and are proposed in the following:
-
-```python
-# Fetch the files
-pred_folder =  "<pred_folder>"
-pred_files = os.listdir(pred_folder)
-
-pulse_regex = "Pulse"
-date_regex = "Pulse[0-9]{1,2}_(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:u|h)[0-9]{2})"
-flr_regex = 'Pulse([0-9]{1,2})'
-
-files = [file for file in pred_files if re.search(pulse_regex, file)] # The files containing the data to predict
-
-# The dataframe that store the results
-phyto_ts = pd.DataFrame(columns = ['airbubble', 'cryptophyte', 'nanoeucaryote',\
-                   'inf1microm_unidentified_particle', 'microphytoplancton',\
-                'picoeucaryote', 'prochlorococcus', \
-                'sup1microm_unidentified_particle', 'synechococcus', 'date', 'FLR'])
-
-# Post processing rules:
-SWS_noise_thr = 70
-FWS_crypto_thr = 1E4
-FWS_micros_thr = 2 * 10 ** 5
-
-for file in files:
-    path = pred_folder + '/' + file
-    cl_count = pd.read_csv(path, usecols = ['Pred FFT Label', 'Total FWS', 'Total SWS'])
-
-    # For cryptos, micros and phrochlo post processing
-    real_cryptos = np.logical_and(cl_count['Total FWS'] >= FWS_crypto_thr, cl_count['Pred FFT Label'] == 'cryptophyte').sum()
-    real_microphytos = np.logical_and(cl_count['Total FWS'] >= FWS_micros_thr, cl_count['Pred FFT Label'] == 'microphytoplancton').sum()
-    false_microphytos = np.logical_and(cl_count['Total FWS'] < FWS_micros_thr, cl_count['Pred FFT Label'] == 'microphytoplancton').sum()
-    false_noise = ((cl_count['Total FWS'] <= 100) & (cl_count['Total SWS'] >= SWS_noise_thr) & (cl_count['Pred FFT Label'] == 'inf1microm_unidentified_particle')).sum()
-
-    cl_count = cl_count['Pred FFT Label'].value_counts()
-
-    cl_count = pd.DataFrame(cl_count).transpose()
-    flr_num = int(re.search(flr_regex, file).group(1))
-
-    # Keep only "big" phyotplankton from FLR25 and "small" one from FLR6
-    if flr_num == 25:
-        for clus_name in ['synechococcus', 'prochlorococcus']:
-            if clus_name in cl_count.columns:
-                cl_count[clus_name] = 0
-
-        # Post processing rules
-        cl_count['cryptophyte'] = real_cryptos
-        cl_count['microphytoplancton'] = real_microphytos
-        cl_count['nanoeucaryote'] += false_microphytos
-
-    elif flr_num == 6:
-        for clus_name in ['picoeucaryote', 'cryptophyte', 'nanoeucaryote', 'microphytoplancton']:
-            if clus_name in cl_count.columns:
-                cl_count[clus_name] = 0
-
-        # Post processing rules
-        try:
-          cl_count['prochlorococcus'] += false_noise
-        except KeyError:
-          cl_count['prochlorococcus'] = false_noise
-
-    else:
-        raise RuntimeError('Unknown flr number', flr_num)
-
-    cl_count['inf1microm_unidentified_particle'] -= false_noise
-
-    # Extract the date
-    date = re.search(date_regex, file).group(1)
-
-    # The timestamp is rounded to the closest 20 minutes    
-    date = pd.to_datetime(date, format='%Y-%m-%d %Hh%M', errors='ignore')
-    mins = date.minute
-
-    if (mins >= 00) & (mins <= 30):
-        date = date.replace(minute=00)
-
-
-    elif (mins >= 31): # On arrondit à l'heure d'après
-        if date.hour != 23:
-            date = date.replace(hour= date.hour + 1, minute=00)
-        else:
-            try:
-                date = date.replace(day = date.day + 1, hour = 00, minute=00)
-            except:
-                date = date.replace(month = date.month + 1, day = 1, hour = 00, minute=00)
-    else:
-      raise RuntimeError(date,'non handled')
-
-    cl_count['date'] = date
-    cl_count['FLR'] = flr_num
-
-    phyto_ts = phyto_ts.append(cl_count)
-
-# For those which have not both a FLR6 and a FLR25 file, replace the missing values by NaN
-idx_pbs = pd.DataFrame(phyto_ts.groupby('date').size())
-idx_pbs = idx_pbs[idx_pbs[0] == 1].index
-
-for idx in idx_pbs:
-    phyto_rpz_ts[phyto_rpz_ts['date'] == idx] = phyto_rpz_ts[phyto_rpz_ts['date'] == idx].replace(0, np.nan)
-
-# Sum the particles counted in the FLR6 files with the associated FLR25 files
-phyto_rpz_ts = phyto_ts.groupby('date').sum()
-phyto_rpz_ts = phyto_rpz_ts.reset_index()
-```
-
-The DataFrame phyto_rpz_ts now contains all the predictions made for different acquisitions.
