@@ -1,6 +1,8 @@
 # phyto_curves_reco
 
 `phyto_curves_reco` is a Python repository for automatic recognition of cytometric Phytoplankton Functional Groups (cPFG).
+This repository aims to reproduce the results of Fuchs et al. (2022) and is not a stand-alone package. 
+
 It enables to format the curves issued by a Cytosense (an Automated Flow Cytometer manufactured by Cytobuoy, b.v.) and predict the cPFG of each particle thanks to a Convolutional Neural Network.
 The classes predicted correspond to six cPFGs (described [here](http://vocab.nerc.ac.uk/collection/F02/current/)):
 - MICRO
@@ -14,11 +16,8 @@ In addition two other classes of particles can be identified by the Network
 - Noise particles smaller than 1 μm.
 - Noise particles bigger than 1 μm.
 
-The final package will soon be available (February 2022).
-
 Before using the package, make sure you have CytoClus4 installed.
-Then extract the Pulse shape files of the acquisitions you want to classify into a local folder.
-In the following, this folder will be denoted by <source_folder>.
+Then extract the "Default" Pulse shape files of the acquisitions you want to classify into a local folder (hereafter denoted <source_folder>).
 
 # Format the data and store them into fastparquet format
 The first step is to format the data and store them into another local folder called thereafter <dest_folder>:
