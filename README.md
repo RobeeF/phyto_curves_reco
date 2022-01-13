@@ -48,7 +48,7 @@ from tensorflow.keras.models import load_model, model_from_json
 from time import time
 
 # Load the model in memory
-cnn = load_model('<folder where the model is stored>/cnn_hyperopt_model_categ')
+cnn = load_model('<folder where the model is stored>/<name of the model repository>')
 
 # Load the nomenclature of the classes
 tn = pd.read_csv('train_test_nomenclature.csv')
