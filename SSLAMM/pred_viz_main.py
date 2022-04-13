@@ -5,11 +5,11 @@ Created on Fri Dec  6 16:06:49 2019
 @author: Utilisateur
 """
 
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 import os 
 import re
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, precision_score
 
 os.chdir('C:/Users/rfuchs/Documents/GitHub/phyto_curves_reco')
