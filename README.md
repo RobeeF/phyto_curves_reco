@@ -1,7 +1,7 @@
 # phyto_curves_reco
 
 `phyto_curves_reco` is a Python repository for automatic recognition of cytometric Phytoplankton Functional Groups (cPFG).
-This repository aims to reproduce the results of Fuchs et al. (2022) and is not a stand-alone package. 
+This repository aims to reproduce the results of Fuchs et al. (2022): "Automatic recognition of flow cytometric phytoplankton functional groups using Convolutional Neural Networks", and is not a stand-alone package. 
 The full data, nomenclature (tn) and models are available at https://erddap.osupytheas.fr/erddap/files/Automatic_recognition_CNN_material/ (check the README at the root of the erddap folder for more information).
 
 It enables to format the curves issued by a Cytosense (an Automated Flow Cytometer manufactured by Cytobuoy, b.v.) and predict the cPFG of each particle thanks to a Convolutional Neural Network.
