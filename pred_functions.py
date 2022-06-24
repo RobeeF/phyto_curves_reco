@@ -5,12 +5,16 @@ Created on Fri Dec  6 16:24:12 2019
 @author: Robin
 """
 
-from dataset_preprocessing import interp_sequences, homogeneous_cluster_names
-import pandas as pd
-import numpy as np
-import scipy.integrate as it
-import fastparquet as fp
 import re
+import numpy as np
+import pandas as pd
+import fastparquet as fp
+import scipy.integrate as it
+from dataset_preprocessing import interp_sequences, homogeneous_cluster_names
+
+# Can be adapted (ex for SWINGS)
+spe_extract = {'ORGNANO': 6, 'ORGPICOPRO': 25, 'REDNANO': 6, 'REDPICOEUK': 6,\
+             'REDPICOPRO': 25, 'MICRO': 25, 'inf1microm': 6, 'sup1microm': 25}
 
 
 def format_data(source_path, dest_folder, fluo2 = 'FL Orange',\
@@ -172,39 +176,32 @@ def predict(source_path, dest_folder, model, tn, fluo2 = 'FL Orange',\
         print('File was empty.')
 
 
-def post_processing(df, flr_num):
-    ''' 
-        Reassign some of the particles classified by the CNN into the right classes
-        df (pandas DataFrame): The CNN predictions
-        flr_num (int): The FLR threshold of the predictions
-        ---------------------------------------------------------------
-        returns (pandas DataFrame): The corrected CNN predictions
-    '''
-    
-    SWS_noise_thr = 70
-    FWS_crypto_thr = 1E4
-    FWS_micros_thr = 2 * 10 ** 5
-    
-    if flr_num == 25:
-        df.loc[np.logical_and(df['Total FWS'] <= FWS_crypto_thr, df['Pred PFG name'] == 'REDNANO'),\
-                      'Pred PFG name'] = 'sup1microm'
-        df.loc[np.logical_and(df['Total FWS'] < FWS_micros_thr, df['Pred PFG name'] == 'MICRO'),\
-                      'Pred PFG name'] = 'REDNANO'
-    else:
-        df.loc[((df['Total FWS'] <= 100) & (df['Total SWS'] >= SWS_noise_thr) \
-               & (df['Pred PFG name'] == 'inf1microm')),\
-               'Pred PFG name'] = 'REDPICOPRO'
-    return df
-
-
 def combine_files_into_acquisitions(df):
-    ''' Merge the predictions made for the FLR6 file and FLR25 for each 
-        acquisition and delete the "corrupted" files
-        df (pandas DataFrame): A dataFrame containing for each date (index) and 
-        pfg (columns), a quantity such as the biomass, the biovolume or the Total FLR 
-        ---------------------------------------------------------------
-        returns (pandas DataFrame): The predicted quantity by date for each pfg
     '''
+    Merge the predictions made for the FLR[low threshold] file and FLR[high threshold]
+    for each acquisition based on the spe_extract dict and delete the "corrupted" files
+
+    Parameters
+    ----------
+    df : pandas DataFrame
+        A dataFrame containing the abundances for each acqusition date and FLR.
+    spe_extract : dict
+        A dict that associates each PFG to a FLR threshold.
+        The abundance of this PFG are fetched in the chosen FLR-threshold files.
+
+    Returns
+    -------
+    df_rpz_ts : pandas DataFrame
+        The compiled abundances
+
+    '''
+
+    #===========================================================================  
+    # Set to zero the unused PFG abundances from the other FLR acquisitions
+    #===========================================================================  
+    
+    for pfg, flr in spe_extract.items():
+        df.loc[df['FLR'] != flr, pfg] = 0
     
     #===========================================================================  
     # Deal with acquisitions that have several FLR6 or FLR25 for the same date
@@ -212,12 +209,14 @@ def combine_files_into_acquisitions(df):
 
     idx_pbs = pd.DataFrame(df.groupby(['date', 'FLR']).size()) 
     idx_pbs = idx_pbs[idx_pbs[0] > 1].index
-    idx_pbs = [id_[0] for id_ in  idx_pbs]
+    idx_pbs = [id_[0] for id_ in  idx_pbs] # Fetch the problematic file dates
     
     df_ok = df[~df['date'].isin(idx_pbs)]
-    df_resolved_pbs =  df[df['date'].isin(idx_pbs)].set_index(['date', 'FLR']).groupby(['date', 'FLR']).max().reset_index() # Take the more likely entry
-    df = df_ok.reset_index(drop = True).append(df_resolved_pbs)
-        
+    
+    # Take the more likely entry:
+    df_resolved_pbs =  df[df['date'].isin(idx_pbs)].groupby(['date', 'FLR']).max().reset_index() 
+    df = pd.concat([df_ok, df_resolved_pbs]).reset_index(drop = True)
+    
     #===========================================================================  
     # Deal with acquisitions which have a FLR6 but no FLR25 (or the reverse)
     #===========================================================================  
@@ -226,10 +225,9 @@ def combine_files_into_acquisitions(df):
     idx_pbs = idx_pbs[idx_pbs[0] == 1].index
     
     df_rpz_ts = df.set_index('date').astype(float).reset_index()
-    df_rpz_ts = df_rpz_ts.groupby('date').sum()
-    df_rpz_ts = df_rpz_ts.reset_index()
+    df_rpz_ts = df_rpz_ts.groupby('date').sum().reset_index()
     
-    # For those which have not both a FLR6 and a FLR25 file, replace the missing values by NaN
+    # For those which have not both a FLR[low] and a FLR[high] file, replace the missing values by NaN
     for idx in idx_pbs:
         df_rpz_ts[df_rpz_ts['date'] == idx] = df_rpz_ts[df_rpz_ts['date'] == idx].replace(0, np.nan)
         

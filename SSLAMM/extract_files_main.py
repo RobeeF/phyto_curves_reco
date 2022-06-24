@@ -127,7 +127,37 @@ extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
 extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
 
 
+#====================
+# P10
+#====================
 
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/P10_L1'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/P10_L2'
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
+
+#====================
+# P11
+#====================
+
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/P11'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/P11_L2'
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
+
+
+#====================
+# P11
+#====================
+
+data_source = 'C:/Users/rfuchs/Documents/cyto_classif/P12'
+data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/P12_L2'
+
+extract_non_labeled_curves(data_source, data_destination, flr_num = 25)
+extract_non_labeled_curves(data_source, data_destination, flr_num = 6)
 
 
 ##################################################################################################
@@ -137,7 +167,6 @@ data_source = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L1/P
 data_destination = 'C:/Users/rfuchs/Documents/cyto_classif/training_9sets/SSLAMM/L2/P2_lab'
 flr_num = 25
 extract_labeled_curves(data_source, data_destination, flr_num = flr_num, spe_extract_FLR = True)
-
 
 
 ##################################################################################################

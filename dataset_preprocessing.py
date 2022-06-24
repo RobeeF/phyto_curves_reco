@@ -4,7 +4,6 @@ import re
 import pandas as pd
 import fastparquet as fp
 import scipy.integrate as it
-from collections import Counter
 
 from copy import deepcopy
 from sklearn.cluster import KMeans
@@ -131,7 +130,7 @@ def gen_train_test_valid(source, cluster_classes, nb_files_tvt = [5, 4, 1],\
 
 
 def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extract_per_group = 1E7, \
-                       to_balance = True, to_undersample = False, scale = False, seed = None):
+                       to_balance = True, to_undersample = False, seed = None):
     ''' Generate a balanced dataset from the cleaned Pulse files
     source (str): The location of extracted (and formatted) Pulse files on disk
     cluster_classes (list of str): The classes used in the prediction task
@@ -197,9 +196,6 @@ def gen_dataset(source, cluster_classes, files = [], le = None, nb_obs_to_extrac
 
     # Give the final form to the dataset
     X = np.vstack(X)
-
-    if scale:
-       X = scaler(X)
 
     y = np.concatenate(y)
 

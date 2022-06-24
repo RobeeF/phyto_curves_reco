@@ -29,21 +29,17 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
 
     
     files_title = [f for f in os.listdir(data_source)]
+    nb_acquisitions = len([f for f in files_title if re.search("_[Pp]ulses.csv", f)])
+        
     # Keep only the interesting csv files
-    #flr_title = [f for f in files_title if re.search("FLR" + str(flr_num) + ' ',f) and re.search("csv",f) ]
     flr_title = [f for f in files_title if re.search("FLR" + str(flr_num),f) and re.search("csv",f) ]
 
     pulse_titles_clus = [f for f in flr_title if  re.search("Pulse",f) and not(re.search("Default",f))]
     pulse_titles_default = [f for f in flr_title if  re.search("Pulse",f) and re.search("Default",f)]
 
-    # Defining the regex
-    #date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
-
     info_regex = "FLR" + str(flr_num) + "(?:IIF)*\s*(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_([a-zA-Z0-9µ ()_-]+)_[Pp]ulses.csv"
-    #date_regex = "FLR" + str(flr_num) + "(?:IIF)*\s*(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}(?:h|u)[0-9]{2})_[A-Za-z ()]+"
-    #pulse_regex = "_([a-zA-Z0-9µ ()_-]+)_Pulses.csv"  
-
-    dates = set([re.search(info_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
+ 
+    dates = set([re.search(info_regex, f).group(1) for f in flr_title if re.search("Pulse",f)])
     
     cluster_classes = list(set([re.search(info_regex, cc).group(2) for cc in pulse_titles_clus]))
 
@@ -51,8 +47,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
     if len(pulse_titles_default) != 0:
         cluster_classes += ['Unassigned Particles']
      
-    nb_acquisitions = len(dates)
-    
+        
     if nb_acquisitions == 0:
         print('No file found...')
     
@@ -101,7 +96,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
                 
             df.set_index("Particle ID", inplace = True)
 
-            pulse_data = pulse_data.append(df)
+            pulse_data = pd.concat([pulse_data, df])
         
         #===========================================================
         # Extract info of noise particles from the default file
@@ -137,7 +132,7 @@ def extract_labeled_curves(data_source, data_destination, flr_num = 6, spe_extra
             clus_name = 'Unassigned Particles'
             df["cluster"] = clus_name
         
-            pulse_data = pulse_data.append(df)
+            pulse_data = pd.concat([pulse_data, df])
         else:
             raise RuntimeError('No Default file to deduce the noise particles from')
 
@@ -181,6 +176,8 @@ def extract_non_labeled_curves(data_source, data_destination, flr_num = 6):
 
     
     files_title = [f for f in os.listdir(data_source)]
+    nb_acquisitions = len([f for f in files_title if re.search("_[Pp]ulses.csv", f)])
+
     # Keep only the interesting csv files
     flr_title = [f for f in files_title if re.search("FLR" + str(flr_num) + ' ',f) and re.search("csv",f) ]
 
@@ -188,7 +185,7 @@ def extract_non_labeled_curves(data_source, data_destination, flr_num = 6):
     date_regex = "FLR" + str(flr_num) + " (20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}h[0-9]{2})_[A-Za-z ()]+"
     dates = set([re.search(date_regex, f).group(1) for f in flr_title if  re.search("Pulse",f)])
      
-    nb_acquisitions = len(dates)
+    #nb_acquisitions = len(dates)
     
     if nb_acquisitions == 0:
         raise RuntimeError('No file found...')
